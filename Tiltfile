@@ -93,15 +93,16 @@ if os.environ.get('DEPLOY_INFRA', '1') != '':
     alloy_application_config = render_dir + '/alloy-application-config.river'
     slurm_values = render_dir + '/slurm.yaml'
     # The restart-in-allocation run adds PRRTE nodes built from a local image,
-    # tagged by the content of its build context.
+    # tagged by the content of its sources.
     restart_in_allocation = os.environ.get('E2E_RESTART_IN_ALLOCATION', '') != ''
     prrte_image_dir = E2E_DIR + '/images/slurmd-prrte'
+    prrte_image_sources = [prrte_image_dir, 'deploy/slurm/nvr-prrte-run']
     prrte_image_repository = 'heimdall-e2e/slurmd-prrte'
     prrte_image_tag = 'disabled'
     if restart_in_allocation:
         prrte_image_tag = str(local(
-            ['sh', '-c', 'tar -C "$1" -cf - --sort=name --mtime=@0 --owner=0 --group=0 . | sha256sum | cut -c1-16',
-             'sh', prrte_image_dir],
+            ['sh', '-c', 'tar -cf - --sort=name --mtime=@0 --owner=0 --group=0 "$@" | sha256sum | cut -c1-16',
+             'sh'] + prrte_image_sources,
             quiet=True,
         )).strip()
     slurm_shared_storage = render_dir + '/slurm-shared-storage.yaml'
@@ -393,7 +394,7 @@ if os.environ.get('DEPLOY_INFRA', '1') != '':
                 prrte_image_repository + ':' + prrte_image_tag,
                 'ghcr.io/slinkyproject/slurmd:' + slinky_slurm_tag,
             ],
-            deps=[prrte_image_dir, E2E_DIR + '/build-slurmd-prrte-image.sh'],
+            deps=prrte_image_sources + [E2E_DIR + '/build-slurmd-prrte-image.sh'],
             labels=[INFRA_LABEL],
         )
         slurm_deps.append('slurmd-prrte-image')
