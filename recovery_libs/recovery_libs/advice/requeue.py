@@ -75,10 +75,13 @@ def check_max_requeue_reached(
                         job.job_attempt_index,
                     )
                     break
+                # A restart in place answered a failure of this attempt without
+                # leaving a failed attempt behind; it counts as one.
+                failed_without_checkpoint += int(job.restarted_in_place)
                 if job.state in _CHECKPOINT_EVAL_STATES:
                     failed_without_checkpoint += 1
-                    if failed_without_checkpoint >= checkpoint_threshold:
-                        break
+                if failed_without_checkpoint >= checkpoint_threshold:
+                    break
             if len(batch) < batch_size:
                 logger.debug("All attempts have been evaluated for job id %s.", status.job_id)
                 break
@@ -123,12 +126,33 @@ def check_max_requeue_reached(
     elif status.aps_spec and status.aps_spec.max_requeue_times:
         effective_requeue_limit = min(effective_requeue_limit, status.aps_spec.max_requeue_times)
 
-    if status.job_attempt_index >= effective_requeue_limit:
+    restarts_in_place = _count_restarts_in_place(status, get_jobs)
+    if status.job_attempt_index + restarts_in_place >= effective_requeue_limit:
         message = (
             f"Job {status.job_id} (attempt {status.job_attempt_index}) has reached the requeue limit of "
             f"{effective_requeue_limit}."
         )
+        if restarts_in_place:
+            message += f" Restarts inside the allocation counted: {restarts_in_place}."
         logger.info(message)
         return (True, message)
 
     return (False, "The job has not reached the requeue limit, requeue will continue.")
+
+
+def _count_restarts_in_place(status: SlurmJobExecutionStatus, get_jobs: GetJobsBatch) -> int:
+    """Count the job's restarts applied inside its allocation, up to this attempt.
+
+    A requeue shows as a new attempt, so the attempt index counts requeues. A
+    restart in place keeps its attempt and is marked on it instead; an attempt
+    carries at most one, so counting the marked attempts counts those restarts.
+    """
+    count = 0
+    offset = 0
+    batch_size = 100
+    while True:
+        batch = get_jobs(job_id=status.job_id, sort_by="job_attempt_index:desc", limit=batch_size, offset=offset)
+        count += sum(1 for job in batch if job.restarted_in_place and job.job_attempt_index <= status.job_attempt_index)
+        if len(batch) < batch_size:
+            return count
+        offset += batch_size

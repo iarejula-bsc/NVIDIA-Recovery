@@ -170,6 +170,10 @@ class SlurmJobExecutionStatus(BaseModel):
 
     anomalies: list[JobAnomaly] | None = None
     checkpoints: list[JobCheckpointInfo] | None = None
+    # Whether a restart of this attempt was applied inside its allocation, so
+    # the attempt kept running instead of producing a successor. Restart limits
+    # count it as a restart.
+    restarted_in_place: bool = False
     aps_spec: ApsSlurmJobSpec | None = None
     config_validation_failure_types: list[str] | None = None
 
@@ -465,6 +469,7 @@ class RecoverySchedulerAction(str, Enum):
     SLURM_UPDATE_CONSTRAINTS = "slurm.update_constraints"
     SLURM_RELEASE = "slurm.release"
     SLURM_CANCEL = "slurm.cancel"
+    SLURM_RESTART_IN_ALLOCATION = "slurm.restart_in_allocation"
 
 
 class RecoverySchedulerActionOutcome(str, Enum):
@@ -601,6 +606,9 @@ class AdviceReconciliationReason(str, Enum):
     SUCCESSOR_ALREADY_RUNNING = "SUCCESSOR_ALREADY_RUNNING"
     INVALID_RECOMMENDATION = "INVALID_RECOMMENDATION"
     UNSUPPORTED_RECOMMENDATION = "UNSUPPORTED_RECOMMENDATION"
+    # A restart was applied inside the job's allocation: the attempt keeps
+    # running instead of producing a successor attempt.
+    RESTARTED_IN_PLACE = "RESTARTED_IN_PLACE"
 
 
 class ResourceDetail(BaseModel):

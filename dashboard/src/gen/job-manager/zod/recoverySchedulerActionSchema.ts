@@ -4,4 +4,4 @@
 
 import * as z from 'zod'
 
-export const recoverySchedulerActionSchema = z.enum(['slurm.requeue_hold', 'slurm.update_constraints', 'slurm.release', 'slurm.cancel'])
+export const recoverySchedulerActionSchema = z.enum(['slurm.requeue_hold', 'slurm.update_constraints', 'slurm.release', 'slurm.cancel', 'slurm.restart_in_allocation'])

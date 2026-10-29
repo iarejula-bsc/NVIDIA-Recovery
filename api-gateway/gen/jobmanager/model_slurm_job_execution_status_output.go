@@ -52,6 +52,7 @@ type SlurmJobExecutionStatusOutput struct {
 	SchedulerMetadata            map[string]interface{}        `json:"schedulerMetadata,omitempty"`
 	Anomalies                    []JobAnomaly                  `json:"anomalies,omitempty"`
 	Checkpoints                  []JobCheckpointInfo           `json:"checkpoints,omitempty"`
+	RestartedInPlace             *bool                         `json:"restarted_in_place,omitempty"`
 	ApsSpec                      NullableApsSlurmJobSpecOutput `json:"aps_spec,omitempty"`
 	ConfigValidationFailureTypes []string                      `json:"config_validation_failure_types,omitempty"`
 	RetryOf                      NullableString                `json:"retry_of,omitempty"`
@@ -72,6 +73,8 @@ func NewSlurmJobExecutionStatusOutput(jobId string, jobAttemptIndex int32, workf
 	this.JobId = jobId
 	this.JobAttemptIndex = jobAttemptIndex
 	this.WorkflowId = workflowId
+	var restartedInPlace bool = false
+	this.RestartedInPlace = &restartedInPlace
 	return &this
 }
 
@@ -80,6 +83,8 @@ func NewSlurmJobExecutionStatusOutput(jobId string, jobAttemptIndex int32, workf
 // but it doesn't guarantee that properties required by API are set
 func NewSlurmJobExecutionStatusOutputWithDefaults() *SlurmJobExecutionStatusOutput {
 	this := SlurmJobExecutionStatusOutput{}
+	var restartedInPlace bool = false
+	this.RestartedInPlace = &restartedInPlace
 	return &this
 }
 
@@ -1278,6 +1283,38 @@ func (o *SlurmJobExecutionStatusOutput) SetCheckpoints(v []JobCheckpointInfo) {
 	o.Checkpoints = v
 }
 
+// GetRestartedInPlace returns the RestartedInPlace field value if set, zero value otherwise.
+func (o *SlurmJobExecutionStatusOutput) GetRestartedInPlace() bool {
+	if o == nil || IsNil(o.RestartedInPlace) {
+		var ret bool
+		return ret
+	}
+	return *o.RestartedInPlace
+}
+
+// GetRestartedInPlaceOk returns a tuple with the RestartedInPlace field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SlurmJobExecutionStatusOutput) GetRestartedInPlaceOk() (*bool, bool) {
+	if o == nil || IsNil(o.RestartedInPlace) {
+		return nil, false
+	}
+	return o.RestartedInPlace, true
+}
+
+// HasRestartedInPlace returns a boolean if a field has been set.
+func (o *SlurmJobExecutionStatusOutput) HasRestartedInPlace() bool {
+	if o != nil && !IsNil(o.RestartedInPlace) {
+		return true
+	}
+
+	return false
+}
+
+// SetRestartedInPlace gets a reference to the given bool and assigns it to the RestartedInPlace field.
+func (o *SlurmJobExecutionStatusOutput) SetRestartedInPlace(v bool) {
+	o.RestartedInPlace = &v
+}
+
 // GetApsSpec returns the ApsSpec field value if set, zero value otherwise (both if not set or set to explicit null).
 func (o *SlurmJobExecutionStatusOutput) GetApsSpec() ApsSlurmJobSpecOutput {
 	if o == nil || IsNil(o.ApsSpec.Get()) {
@@ -1613,6 +1650,9 @@ func (o SlurmJobExecutionStatusOutput) ToMap() (map[string]interface{}, error) {
 	if o.Checkpoints != nil {
 		toSerialize["checkpoints"] = o.Checkpoints
 	}
+	if !IsNil(o.RestartedInPlace) {
+		toSerialize["restarted_in_place"] = o.RestartedInPlace
+	}
 	if o.ApsSpec.IsSet() {
 		toSerialize["aps_spec"] = o.ApsSpec.Get()
 	}
@@ -1707,6 +1747,7 @@ func (o *SlurmJobExecutionStatusOutput) UnmarshalJSON(data []byte) (err error) {
 		delete(additionalProperties, "schedulerMetadata")
 		delete(additionalProperties, "anomalies")
 		delete(additionalProperties, "checkpoints")
+		delete(additionalProperties, "restarted_in_place")
 		delete(additionalProperties, "aps_spec")
 		delete(additionalProperties, "config_validation_failure_types")
 		delete(additionalProperties, "retry_of")

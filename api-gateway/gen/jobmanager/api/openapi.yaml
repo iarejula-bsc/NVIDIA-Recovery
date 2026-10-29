@@ -1762,6 +1762,7 @@ components:
       - SUCCESSOR_ALREADY_RUNNING
       - INVALID_RECOMMENDATION
       - UNSUPPORTED_RECOMMENDATION
+      - RESTARTED_IN_PLACE
       title: AdviceReconciliationReason
       type: string
     AdviceReconciliationStatus:
@@ -1875,6 +1876,8 @@ components:
                 files. Defaults to False, which requires unique per-attempt paths and protects event correlation from
                 stale paths returned by Slurm during a requeue race.
             nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is "disabled".
+            in_place_recovery (Optional[InPlaceRecoveryEnum]): The mechanism that recovers this job inside its own
+                allocation after it loses nodes. None, the default, means the job has none and is recovered by requeue.
             anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to
                 AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use
                 AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the
@@ -1892,6 +1895,7 @@ components:
         environment: environment
         workflow_name: workflow_name
         log_file_paths_shared_across_attempts: false
+        in_place_recovery: prrte
         max_requeue_times: 2
         anomaly_detection_config:
           log_based_timeout_threshold_trainingloop: 9
@@ -1936,6 +1940,8 @@ components:
         nvrx:
           nullable: true
           type: string
+        in_place_recovery:
+          $ref: "#/components/schemas/InPlaceRecoveryEnum"
         anomaly_detection_config:
           $ref: "#/components/schemas/AnomalyDetectionConfig"
         dag_dependencies:
@@ -1967,6 +1973,8 @@ components:
                 files. Defaults to False, which requires unique per-attempt paths and protects event correlation from
                 stale paths returned by Slurm during a requeue race.
             nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is "disabled".
+            in_place_recovery (Optional[InPlaceRecoveryEnum]): The mechanism that recovers this job inside its own
+                allocation after it loses nodes. None, the default, means the job has none and is recovered by requeue.
             anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to
                 AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use
                 AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the
@@ -1984,6 +1992,7 @@ components:
         environment: environment
         workflow_name: workflow_name
         log_file_paths_shared_across_attempts: false
+        in_place_recovery: prrte
         max_requeue_times: 2
         anomaly_detection_config:
           log_based_timeout_threshold_trainingloop: 9
@@ -2028,6 +2037,8 @@ components:
         nvrx:
           nullable: true
           type: string
+        in_place_recovery:
+          $ref: "#/components/schemas/InPlaceRecoveryEnum"
         anomaly_detection_config:
           $ref: "#/components/schemas/AnomalyDetectionConfig"
         dag_dependencies:
@@ -2301,6 +2312,16 @@ components:
             $ref: "#/components/schemas/ValidationError"
           type: array
       title: HTTPValidationError
+    InPlaceRecoveryEnum:
+      description: |-
+        This enum class names the mechanism that recovers the job inside its own allocation after it loses nodes.
+
+        PRRTE: the job's PRRTE runtime replaces the blamed nodes on order, quarantining them and growing the allocation by
+            as many nodes, then relaunches the application. NVIDIA Recovery orders it instead of requeueing the job.
+      enum:
+      - prrte
+      title: InPlaceRecoveryEnum
+      type: string
     Issue-Input:
       description: |-
         Describes a detected issue for a job.
@@ -2551,6 +2572,7 @@ components:
             environment: environment
             workflow_name: workflow_name
             log_file_paths_shared_across_attempts: false
+            in_place_recovery: prrte
             max_requeue_times: 2
             anomaly_detection_config:
               log_based_timeout_threshold_trainingloop: 9
@@ -2629,6 +2651,7 @@ components:
           schedulerMetadata:
             key: ""
           user: user
+          restarted_in_place: false
         - cluster: cluster
           workflow_id: workflow_id
           exclusion_node_list:
@@ -2646,6 +2669,7 @@ components:
             environment: environment
             workflow_name: workflow_name
             log_file_paths_shared_across_attempts: false
+            in_place_recovery: prrte
             max_requeue_times: 2
             anomaly_detection_config:
               log_based_timeout_threshold_trainingloop: 9
@@ -2724,6 +2748,7 @@ components:
           schedulerMetadata:
             key: ""
           user: user
+          restarted_in_place: false
       properties:
         item_count:
           title: Item Count
@@ -3483,6 +3508,7 @@ components:
       - slurm.update_constraints
       - slurm.release
       - slurm.cancel
+      - slurm.restart_in_allocation
       title: RecoverySchedulerAction
       type: string
     RecoverySchedulerActionOutcome:
@@ -3673,6 +3699,10 @@ components:
             $ref: "#/components/schemas/JobCheckpointInfo"
           nullable: true
           type: array
+        restarted_in_place:
+          default: false
+          title: Restarted In Place
+          type: boolean
         aps_spec:
           $ref: "#/components/schemas/ApsSlurmJobSpec-Input"
         config_validation_failure_types:
@@ -3723,6 +3753,7 @@ components:
           environment: environment
           workflow_name: workflow_name
           log_file_paths_shared_across_attempts: false
+          in_place_recovery: prrte
           max_requeue_times: 2
           anomaly_detection_config:
             log_based_timeout_threshold_trainingloop: 9
@@ -3801,6 +3832,7 @@ components:
         schedulerMetadata:
           key: ""
         user: user
+        restarted_in_place: false
       properties:
         job_id:
           title: Job Id
@@ -3916,6 +3948,10 @@ components:
             $ref: "#/components/schemas/JobCheckpointInfo"
           nullable: true
           type: array
+        restarted_in_place:
+          default: false
+          title: Restarted In Place
+          type: boolean
         aps_spec:
           $ref: "#/components/schemas/ApsSlurmJobSpec-Output"
         config_validation_failure_types:

@@ -23,6 +23,7 @@ model_get_recovery_sequence_response.go
 model_get_workflows_response.go
 model_global_event.go
 model_http_validation_error.go
+model_in_place_recovery_enum.go
 model_issue_input.go
 model_issue_output.go
 model_job_anomaly.go

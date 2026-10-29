@@ -1122,6 +1122,7 @@ def test_update_job_record(mysql_storage, session, job_id, job_group_id):
     update_values.pop("job_id")
     update_values.pop("job_attempt_index")
     update_values.pop("attribution_request_emitted")  # claim-only, never written via update_job_record
+    update_values.pop("restarted_in_place")  # set only when a restart in place converges
 
     expected_query = (
         update(SlurmJobExecutionRecord)
@@ -1172,6 +1173,7 @@ def test_update_job_record_with_shorter_node_list(mysql_storage, session):
     for field_name in [
         "job_group_id",
         "attribution_request_emitted",  # claim-only, never written via update_job_record
+        "restarted_in_place",  # set only when a restart in place converges
         "start_time",
         "end_time",
         "anomalies",

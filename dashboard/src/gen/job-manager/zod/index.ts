@@ -40,6 +40,7 @@ export { getStatusResponseSchema, getStatusStatus200Schema } from './getStatusSc
 export { getWorkflowsResponseSchema } from './getWorkflowsResponseSchema'
 export { getWorkflowsErrorSchema, getWorkflowsQueryLimitSchema, getWorkflowsQueryOffsetSchema, getWorkflowsQueryWorkflowIdMatchSchema, getWorkflowsQueryWorkflowIdSchema, getWorkflowsStatus200Schema, getWorkflowsStatus422Schema } from './getWorkflowsSchema'
 export { globalEventSchema } from './globalEventSchema'
+export { inPlaceRecoveryEnumSchema } from './inPlaceRecoveryEnumSchema'
 export { issueInputSchema } from './issueInputSchema'
 export { issueOutputSchema } from './issueOutputSchema'
 export { jobAnomalyHandledBySchema } from './jobAnomalyHandledBySchema'

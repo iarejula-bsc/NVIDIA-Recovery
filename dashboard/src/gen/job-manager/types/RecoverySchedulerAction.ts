@@ -6,7 +6,8 @@ export const recoverySchedulerAction = {
     "slurm.requeue_hold": "slurm.requeue_hold",
     "slurm.update_constraints": "slurm.update_constraints",
     "slurm.release": "slurm.release",
-    "slurm.cancel": "slurm.cancel"
+    "slurm.cancel": "slurm.cancel",
+    "slurm.restart_in_allocation": "slurm.restart_in_allocation"
 } as const;
 
 export type RecoverySchedulerActionKey = (typeof recoverySchedulerAction)[keyof typeof recoverySchedulerAction];

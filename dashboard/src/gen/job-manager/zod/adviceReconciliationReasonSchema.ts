@@ -4,4 +4,4 @@
 
 import * as z from 'zod'
 
-export const adviceReconciliationReasonSchema = z.enum(['DESIRED_STATE_OBSERVED', 'ALREADY_SATISFIED', 'ADVICE_EXPIRED', 'STALE_ATTEMPT', 'TARGET_STATE_FINAL', 'SUCCESSOR_ALREADY_RUNNING', 'INVALID_RECOMMENDATION', 'UNSUPPORTED_RECOMMENDATION']).describe('Bounded machine-readable reasons for Advice reconciliation status.')
+export const adviceReconciliationReasonSchema = z.enum(['DESIRED_STATE_OBSERVED', 'ALREADY_SATISFIED', 'ADVICE_EXPIRED', 'STALE_ATTEMPT', 'TARGET_STATE_FINAL', 'SUCCESSOR_ALREADY_RUNNING', 'INVALID_RECOMMENDATION', 'UNSUPPORTED_RECOMMENDATION', 'RESTARTED_IN_PLACE']).describe('Bounded machine-readable reasons for Advice reconciliation status.')

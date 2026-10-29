@@ -651,6 +651,12 @@ class SlurmJobExecutionRecord(DataClassBase):
     # de-dup emission across the terminal-transition and anomaly-record paths via an
     # atomic conditional update (see claim_attribution_request_emission).
     attribution_request_emitted: Mapped[bool] = mapped_column(Boolean, default=False, kw_only=True)
+    # Set once a restart of this attempt was applied inside its allocation, so
+    # the attempt kept running instead of producing a successor. Recovery is
+    # modeled per attempt and an attempt is restarted in place at most once;
+    # restart limits count it as a restart. Only
+    # mark_attempt_restarted_in_place() sets it.
+    restarted_in_place: Mapped[bool] = mapped_column(Boolean, default=False, kw_only=True)
 
     # DEPRECATED: this field is no longer used and will not be populated with actual values.
     retry_of: Mapped[str | None] = mapped_column(String(64), default=None, kw_only=True)
@@ -900,6 +906,7 @@ class SlurmJobExecutionRecord(DataClassBase):
             ),
             last_updated_at=datetime.fromisoformat(json["last_updated_at"]),
             attribution_request_emitted=json.get("attribution_request_emitted", False),
+            restarted_in_place=json.get("restarted_in_place", False),
             retry_of=json["retry_of"],
             log_file_paths=(json["log_file_paths"] if json.get("log_file_paths") else None),
             worker_cluster_name=json.get("worker_cluster_name"),
@@ -958,6 +965,7 @@ class SlurmJobExecutionRecord(DataClassBase):
             "last_state_transition_time": self.last_state_transition_time,
             "last_updated_at": self.last_updated_at,
             "attribution_request_emitted": self.attribution_request_emitted,
+            "restarted_in_place": self.restarted_in_place,
             "retry_of": self.retry_of,
             "log_file_paths": self.log_file_paths,
             "filename": None,
@@ -1015,6 +1023,7 @@ class SlurmJobExecutionRecord(DataClassBase):
                 ),
                 "last_updated_at": (self.last_updated_at.isoformat() if self.last_updated_at else None),
                 "attribution_request_emitted": self.attribution_request_emitted,
+                "restarted_in_place": self.restarted_in_place,
                 "retry_of": self.retry_of,
                 "log_file_paths": self.log_file_paths,
                 "worker_cluster_name": self.worker_cluster_name,

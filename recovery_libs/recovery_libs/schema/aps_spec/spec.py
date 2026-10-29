@@ -11,6 +11,17 @@ DEFAULT_LOG_BASED_TIMEOUT_THRESHOLD_TRAININGLOOP_SECS = 840
 StrictPositiveInt = Annotated[int, Field(gt=0, strict=True)]
 
 
+class InPlaceRecoveryEnum(str, Enum):
+    """
+    This enum class names the mechanism that recovers the job inside its own allocation after it loses nodes.
+
+    PRRTE: the job's PRRTE runtime replaces the blamed nodes on order, quarantining them and growing the allocation by
+        as many nodes, then relaunches the application. NVIDIA Recovery orders it instead of requeueing the job.
+    """
+
+    PRRTE = "prrte"
+
+
 class AutoResumeModeEnum(str, Enum):
     """
     This enum class defines the auto resume mode for the job.
@@ -125,6 +136,8 @@ class ApsSlurmJobSpec(BaseModel):
             files. Defaults to False, which requires unique per-attempt paths and protects event correlation from
             stale paths returned by Slurm during a requeue race.
         nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is "disabled".
+        in_place_recovery (Optional[InPlaceRecoveryEnum]): The mechanism that recovers this job inside its own
+            allocation after it loses nodes. None, the default, means the job has none and is recovered by requeue.
         anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to
             AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use
             AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the
@@ -149,6 +162,7 @@ class ApsSlurmJobSpec(BaseModel):
     requeue_on_completion: bool | None = None
     log_file_paths_shared_across_attempts: bool = False
     nvrx: str | None = "disabled"  # Supported values: "enabled", "disabled", "true", "false"
+    in_place_recovery: InPlaceRecoveryEnum | None = None
     anomaly_detection_config: AnomalyDetectionConfig = Field(default_factory=AnomalyDetectionConfig)
     dag_dependencies: list[DagDependencyStep] | None = None
     dag_action: DagActionEnum | None = None

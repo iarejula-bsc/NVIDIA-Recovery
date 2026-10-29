@@ -111,3 +111,49 @@ def test_check_max_requeue_reached_checkpoint_found_breaks_sequence():
     )
 
     assert reached is False
+
+
+def test_check_max_requeue_reached_counts_restarts_in_place():
+    """A restart in place keeps its attempt, so the limit counts it on top of the attempt index.
+
+    With a limit of 2, attempt 1 has been restarted once by requeue; attempt 0
+    was also restarted once inside its allocation, so the job has used both.
+    """
+    status = random_job_execution_status(job_id="12345", job_attempt_index=1, state="FAILED")
+    restarted_in_place = random_job_execution_status(job_id="12345", job_attempt_index=0, state="REQUEUED")
+    restarted_in_place.restarted_in_place = True
+    status.aps_spec = ApsSlurmJobSpec(max_requeue_times=2)
+
+    reached, _ = check_max_requeue_reached(
+        status,
+        system_requeue_config=SystemRequeueConfig(max_requeue_times=10),
+        get_jobs=lambda **kwargs: [status, restarted_in_place],
+    )
+    assert reached is True
+
+    restarted_in_place.restarted_in_place = False
+    reached, _ = check_max_requeue_reached(
+        status,
+        system_requeue_config=SystemRequeueConfig(max_requeue_times=10),
+        get_jobs=lambda **kwargs: [status, restarted_in_place],
+    )
+    assert reached is False
+
+
+def test_check_max_requeue_reached_checkpoint_stop_counts_restarts_in_place():
+    """A restart in place answered a failure without leaving a failed attempt; the stop counts it."""
+    status = random_job_execution_status(job_id="12345", job_attempt_index=1, state="FAILED")
+    restarted_in_place = random_job_execution_status(job_id="12345", job_attempt_index=0, state="REQUEUED")
+    restarted_in_place.restarted_in_place = True
+
+    reached, message = check_max_requeue_reached(
+        status,
+        system_requeue_config=SystemRequeueConfig(
+            max_requeue_times=10,
+            checkpoint_based_requeue_stop_threshold=3,
+        ),
+        get_jobs=lambda **kwargs: [status, restarted_in_place],
+    )
+
+    assert reached is True
+    assert "checkpoint" in message.lower()

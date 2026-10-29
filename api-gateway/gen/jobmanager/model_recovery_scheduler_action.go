@@ -20,10 +20,11 @@ type RecoverySchedulerAction string
 
 // List of RecoverySchedulerAction
 const (
-	RECOVERYSCHEDULERACTION_SLURM_REQUEUE_HOLD       RecoverySchedulerAction = "slurm.requeue_hold"
-	RECOVERYSCHEDULERACTION_SLURM_UPDATE_CONSTRAINTS RecoverySchedulerAction = "slurm.update_constraints"
-	RECOVERYSCHEDULERACTION_SLURM_RELEASE            RecoverySchedulerAction = "slurm.release"
-	RECOVERYSCHEDULERACTION_SLURM_CANCEL             RecoverySchedulerAction = "slurm.cancel"
+	RECOVERYSCHEDULERACTION_SLURM_REQUEUE_HOLD          RecoverySchedulerAction = "slurm.requeue_hold"
+	RECOVERYSCHEDULERACTION_SLURM_UPDATE_CONSTRAINTS    RecoverySchedulerAction = "slurm.update_constraints"
+	RECOVERYSCHEDULERACTION_SLURM_RELEASE               RecoverySchedulerAction = "slurm.release"
+	RECOVERYSCHEDULERACTION_SLURM_CANCEL                RecoverySchedulerAction = "slurm.cancel"
+	RECOVERYSCHEDULERACTION_SLURM_RESTART_IN_ALLOCATION RecoverySchedulerAction = "slurm.restart_in_allocation"
 )
 
 // All allowed values of RecoverySchedulerAction enum
@@ -32,6 +33,7 @@ var AllowedRecoverySchedulerActionEnumValues = []RecoverySchedulerAction{
 	"slurm.update_constraints",
 	"slurm.release",
 	"slurm.cancel",
+	"slurm.restart_in_allocation",
 }
 
 func (v *RecoverySchedulerAction) UnmarshalJSON(src []byte) error {

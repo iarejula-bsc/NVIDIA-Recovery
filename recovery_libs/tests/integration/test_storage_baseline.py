@@ -27,7 +27,8 @@ from sqlalchemy.exc import SQLAlchemyError
 BASELINE_REVISION = "000000000001"
 DAG_OBSERVABILITY_REVISION = "000000000002"
 ADVICE_LIFECYCLE_REVISION = "000000000004"
-HEAD_REVISION = "000000000005"
+REMOVE_ON_DEMAND_UPDATES_REVISION = "000000000005"
+HEAD_REVISION = "000000000006"
 ALEMBIC_DIRECTORY = Path(storage_dataclass.__file__).parent / "alembic"
 APPLICATION_TABLES = {
     "advice",
@@ -171,7 +172,8 @@ def test_retire_on_demand_tracking_preserves_job_data(migration_connection: Conn
     original = dict(connection.execute(text("SELECT * FROM job_execution_records")).mappings().one())
     expected = {key: value for key, value in original.items() if key not in retired_columns}
 
-    _upgrade(connection)
+    command.upgrade(config, REMOVE_ON_DEMAND_UPDATES_REVISION)
+    connection.commit()
     assert retired_columns.isdisjoint(
         column["name"] for column in inspect(connection).get_columns("job_execution_records")
     )
@@ -184,9 +186,36 @@ def test_retire_on_demand_tracking_preserves_job_data(migration_connection: Conn
     restored_columns = {column["name"]: column for column in inspect(connection).get_columns("job_execution_records")}
     assert all(restored_columns[column]["nullable"] for column in retired_columns)
 
-    _upgrade(connection)
+    command.upgrade(config, REMOVE_ON_DEMAND_UPDATES_REVISION)
+    connection.commit()
     assert dict(connection.execute(text("SELECT * FROM job_execution_records")).mappings().one()) == expected
+
+
+def test_restarted_in_place_migration_preserves_job_data(migration_connection: Connection) -> None:
+    """Attempts stored before the column existed read back unchanged and not restarted in place."""
+    connection = migration_connection
+    config = _alembic_config(connection)
+    command.upgrade(config, REMOVE_ON_DEMAND_UPDATES_REVISION)
+    connection.execute(
+        text(
+            "INSERT INTO job_execution_records "
+            "(job_id, job_attempt_index, workflow_id, state, last_updated_at, "
+            "last_state_transition_time, attribution_request_emitted) "
+            "VALUES ('running-job', 0, 'workflow-42', 'RUNNING', '2026-10-01 12:00:00', "
+            "'2026-10-01 11:00:00', FALSE)"
+        )
+    )
+    connection.commit()
+    original = dict(connection.execute(text("SELECT * FROM job_execution_records")).mappings().one())
+
+    _upgrade(connection)
     command.check(config)
+    upgraded = dict(connection.execute(text("SELECT * FROM job_execution_records")).mappings().one())
+    assert upgraded == original | {"restarted_in_place": 0}
+
+    command.downgrade(config, REMOVE_ON_DEMAND_UPDATES_REVISION)
+    connection.commit()
+    assert dict(connection.execute(text("SELECT * FROM job_execution_records")).mappings().one()) == original
 
 
 def test_dag_dependency_observability_values_round_trip_through_storage(

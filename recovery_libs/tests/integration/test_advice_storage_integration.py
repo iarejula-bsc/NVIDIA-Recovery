@@ -975,3 +975,91 @@ class TestAdviceStorageIntegration:
         assert retrieved.updated_at.tzinfo == UTC
         assert retrieved.issues[0].timestamp.tzinfo == UTC
         assert retrieved.issues[0].remediation_actions[0].timestamp.tzinfo == UTC
+
+
+def _restart_advice(heimdall_id: uuid.UUID, job_id: str, anomaly_uuid: str) -> AdviceRecord:
+    now = datetime.now(UTC)
+    return AdviceRecord(
+        heimdall_id=heimdall_id,
+        visible=True,
+        job_id=job_id,
+        scheduler_metadata={"scheduler": "slurm"},
+        attempt_index=0,
+        advice_state="Restarted",
+        fact_attribution={"anomaly_uuid": anomaly_uuid},
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _restarted_in_place(advice_id: uuid.UUID, generation: int) -> AdviceReconciliationStatusRecord:
+    now = datetime.now(UTC)
+    return AdviceReconciliationStatusRecord(
+        advice_id=advice_id,
+        observed_generation=generation,
+        disposition=AdviceReconciliationDisposition.CONVERGED.value,
+        reason=AdviceReconciliationReason.RESTARTED_IN_PLACE.value,
+        observed_at=now,
+        transitioned_at=now,
+    )
+
+
+class TestRestartInPlaceStorageIntegration:
+    """Recovery is modeled per attempt; an attempt restarted in place gets one more round."""
+
+    def test_restart_in_place_reopens_the_attempt_once(self, mysql_storage, clean_advice_tables):
+        advice_id = uuid.uuid4()
+        _ensure_job_record(mysql_storage, "test_in_place", 0, advice_id)
+        assert mysql_storage.claim_attribution_request_emission("test_in_place", 0)
+        first = mysql_storage.upsert_advice(_restart_advice(advice_id, "test_in_place", "anomaly-1")).inserted_record
+
+        # The restart converged in place: the attempt is marked and its
+        # attribution claim reopens for the attempt's next failure.
+        mysql_storage.upsert_advice_reconciliation_status(_restarted_in_place(advice_id, first.generation))
+        record = mysql_storage.read_job_record(job_id="test_in_place", job_attempt_index=0)
+        assert record.restarted_in_place is True
+        assert mysql_storage.claim_attribution_request_emission("test_in_place", 0)
+
+        # While the recovered job keeps running, neither a writer replaying the
+        # applied restart nor attribution of the repaired failure, whatever
+        # anomaly it reports, may restart it again.
+        for anomaly in ("anomaly-1", "anomaly-2"):
+            replay = mysql_storage.upsert_advice(_restart_advice(advice_id, "test_in_place", anomaly)).inserted_record
+            assert replay.generation == first.generation
+
+        # Once the attempt has ended after the restart in place, it failed again:
+        # the restart that answers it is a new request.
+        mysql_storage.update_job_record(job_id="test_in_place", job_attempt_index=0, state="FAILED")
+        second = mysql_storage.upsert_advice(_restart_advice(advice_id, "test_in_place", "anomaly-1")).inserted_record
+        assert second.generation == first.generation + 1
+
+        # The attempt is reopened at most once, matching the controller, which
+        # requeues an attempt it already restarted in place.
+        mysql_storage.upsert_advice_reconciliation_status(_restarted_in_place(advice_id, second.generation))
+        assert not mysql_storage.claim_attribution_request_emission("test_in_place", 0)
+
+    def test_ordinary_convergence_does_not_reopen_the_attempt(self, mysql_storage, clean_advice_tables):
+        advice_id = uuid.uuid4()
+        _ensure_job_record(mysql_storage, "test_requeued", 0, advice_id)
+        assert mysql_storage.claim_attribution_request_emission("test_requeued", 0)
+        advice = mysql_storage.upsert_advice(_restart_advice(advice_id, "test_requeued", "anomaly-1")).inserted_record
+        now = datetime.now(UTC)
+        mysql_storage.upsert_advice_reconciliation_status(
+            AdviceReconciliationStatusRecord(
+                advice_id=advice_id,
+                observed_generation=advice.generation,
+                disposition=AdviceReconciliationDisposition.CONVERGED.value,
+                reason=AdviceReconciliationReason.DESIRED_STATE_OBSERVED.value,
+                observed_at=now,
+                transitioned_at=now,
+            )
+        )
+
+        record = mysql_storage.read_job_record(job_id="test_requeued", job_attempt_index=0)
+        assert record.restarted_in_place is False
+        assert not mysql_storage.claim_attribution_request_emission("test_requeued", 0)
+        # Without a restart in place, a new anomaly alone does not open a generation,
+        # even once the attempt has ended.
+        mysql_storage.update_job_record(job_id="test_requeued", job_attempt_index=0, state="FAILED")
+        again = mysql_storage.upsert_advice(_restart_advice(advice_id, "test_requeued", "anomaly-2")).inserted_record
+        assert again.generation == advice.generation

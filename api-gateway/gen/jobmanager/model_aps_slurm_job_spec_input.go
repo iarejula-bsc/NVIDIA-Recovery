@@ -17,19 +17,20 @@ import (
 // checks if the ApsSlurmJobSpecInput type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &ApsSlurmJobSpecInput{}
 
-// ApsSlurmJobSpecInput APS Slurm Job Spec, today this spec should be passed to APS as a JSON string included in the \"comment\" of a Slurm job.  Attributes:     workflow_id (Optional[str]): The workflow this Slurm job belongs to.     workflow_name (Optional[str]): Deprecated alias for workflow_id.     environment (Optional[str]): The APS/NVIDIA Recovery environment that the job should be managed by, if not specified,         the job will be managed by the \"prod\" environment.     auto_resume_mode (Optional[AutoResumeModeEnum]): The auto resume mode for the job.     max_requeue_times (Optional[PositiveInt]): The max number of requeue that will happen to the job. Only         applicable when auto_resume_mode is set to REQUEUE. If not specified, the system wide max job attempt limit         will be used. Note that the max requeue times will be capped at the system wide limit too.     requeue_on_completion (Optional[bool]): Whether to requeue the job on normal completion. Default is None which         means it follows the system wide default. Setting it to either True or False will override the system wide         default. Only meaningful when auto_resume_mode is set to REQUEUE.     log_file_paths_shared_across_attempts (bool): Whether requeued attempts intentionally write to the same log         files. Defaults to False, which requires unique per-attempt paths and protects event correlation from         stale paths returned by Slurm during a requeue race.     nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is \"disabled\".     anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to         AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use         AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the         job enters FAILED state. Use AnomalyDetectionConfig(log_based_timeout_enabled=False) to suppress         log-based no-output (HANGNOOUTPUT) anomalies, or override         log_based_timeout_threshold_pretraining / log_based_timeout_threshold_trainingloop to tune the         per-phase silence window before a HANGNOOUTPUT anomaly may fire.     dag_dependencies (Optional[list[DagDependencyStep]]): DAG dependencies that must be satisfied before this         job can run. Each step specifies a dependency job and a trigger condition. The current job will only be         eligible for execution when all dependencies are met.     dag_action (Optional[DagActionEnum]): The action to take on this job after all its dag_dependencies are         satisfied. For example, RELEASE will release the job so it becomes eligible for scheduling.
+// ApsSlurmJobSpecInput APS Slurm Job Spec, today this spec should be passed to APS as a JSON string included in the \"comment\" of a Slurm job.  Attributes:     workflow_id (Optional[str]): The workflow this Slurm job belongs to.     workflow_name (Optional[str]): Deprecated alias for workflow_id.     environment (Optional[str]): The APS/NVIDIA Recovery environment that the job should be managed by, if not specified,         the job will be managed by the \"prod\" environment.     auto_resume_mode (Optional[AutoResumeModeEnum]): The auto resume mode for the job.     max_requeue_times (Optional[PositiveInt]): The max number of requeue that will happen to the job. Only         applicable when auto_resume_mode is set to REQUEUE. If not specified, the system wide max job attempt limit         will be used. Note that the max requeue times will be capped at the system wide limit too.     requeue_on_completion (Optional[bool]): Whether to requeue the job on normal completion. Default is None which         means it follows the system wide default. Setting it to either True or False will override the system wide         default. Only meaningful when auto_resume_mode is set to REQUEUE.     log_file_paths_shared_across_attempts (bool): Whether requeued attempts intentionally write to the same log         files. Defaults to False, which requires unique per-attempt paths and protects event correlation from         stale paths returned by Slurm during a requeue race.     nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is \"disabled\".     in_place_recovery (Optional[InPlaceRecoveryEnum]): The mechanism that recovers this job inside its own         allocation after it loses nodes. None, the default, means the job has none and is recovered by requeue.     anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to         AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use         AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the         job enters FAILED state. Use AnomalyDetectionConfig(log_based_timeout_enabled=False) to suppress         log-based no-output (HANGNOOUTPUT) anomalies, or override         log_based_timeout_threshold_pretraining / log_based_timeout_threshold_trainingloop to tune the         per-phase silence window before a HANGNOOUTPUT anomaly may fire.     dag_dependencies (Optional[list[DagDependencyStep]]): DAG dependencies that must be satisfied before this         job can run. Each step specifies a dependency job and a trigger condition. The current job will only be         eligible for execution when all dependencies are met.     dag_action (Optional[DagActionEnum]): The action to take on this job after all its dag_dependencies are         satisfied. For example, RELEASE will release the job so it becomes eligible for scheduling.
 type ApsSlurmJobSpecInput struct {
-	WorkflowId                       NullableString             `json:"workflow_id,omitempty"`
-	WorkflowName                     NullableString             `json:"workflow_name,omitempty"`
-	Environment                      NullableString             `json:"environment,omitempty"`
-	AutoResumeMode                   NullableAutoResumeModeEnum `json:"auto_resume_mode,omitempty"`
-	MaxRequeueTimes                  NullableInt32              `json:"max_requeue_times,omitempty"`
-	RequeueOnCompletion              NullableBool               `json:"requeue_on_completion,omitempty"`
-	LogFilePathsSharedAcrossAttempts *bool                      `json:"log_file_paths_shared_across_attempts,omitempty"`
-	Nvrx                             NullableString             `json:"nvrx,omitempty"`
-	AnomalyDetectionConfig           *AnomalyDetectionConfig    `json:"anomaly_detection_config,omitempty"`
-	DagDependencies                  []DagDependencyStep        `json:"dag_dependencies,omitempty"`
-	DagAction                        NullableDagActionEnum      `json:"dag_action,omitempty"`
+	WorkflowId                       NullableString              `json:"workflow_id,omitempty"`
+	WorkflowName                     NullableString              `json:"workflow_name,omitempty"`
+	Environment                      NullableString              `json:"environment,omitempty"`
+	AutoResumeMode                   NullableAutoResumeModeEnum  `json:"auto_resume_mode,omitempty"`
+	MaxRequeueTimes                  NullableInt32               `json:"max_requeue_times,omitempty"`
+	RequeueOnCompletion              NullableBool                `json:"requeue_on_completion,omitempty"`
+	LogFilePathsSharedAcrossAttempts *bool                       `json:"log_file_paths_shared_across_attempts,omitempty"`
+	Nvrx                             NullableString              `json:"nvrx,omitempty"`
+	InPlaceRecovery                  NullableInPlaceRecoveryEnum `json:"in_place_recovery,omitempty"`
+	AnomalyDetectionConfig           *AnomalyDetectionConfig     `json:"anomaly_detection_config,omitempty"`
+	DagDependencies                  []DagDependencyStep         `json:"dag_dependencies,omitempty"`
+	DagAction                        NullableDagActionEnum       `json:"dag_action,omitempty"`
 	AdditionalProperties             map[string]interface{}
 }
 
@@ -389,6 +390,49 @@ func (o *ApsSlurmJobSpecInput) UnsetNvrx() {
 	o.Nvrx.Unset()
 }
 
+// GetInPlaceRecovery returns the InPlaceRecovery field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *ApsSlurmJobSpecInput) GetInPlaceRecovery() InPlaceRecoveryEnum {
+	if o == nil || IsNil(o.InPlaceRecovery.Get()) {
+		var ret InPlaceRecoveryEnum
+		return ret
+	}
+	return *o.InPlaceRecovery.Get()
+}
+
+// GetInPlaceRecoveryOk returns a tuple with the InPlaceRecovery field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *ApsSlurmJobSpecInput) GetInPlaceRecoveryOk() (*InPlaceRecoveryEnum, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.InPlaceRecovery.Get(), o.InPlaceRecovery.IsSet()
+}
+
+// HasInPlaceRecovery returns a boolean if a field has been set.
+func (o *ApsSlurmJobSpecInput) HasInPlaceRecovery() bool {
+	if o != nil && o.InPlaceRecovery.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetInPlaceRecovery gets a reference to the given NullableInPlaceRecoveryEnum and assigns it to the InPlaceRecovery field.
+func (o *ApsSlurmJobSpecInput) SetInPlaceRecovery(v InPlaceRecoveryEnum) {
+	o.InPlaceRecovery.Set(&v)
+}
+
+// SetInPlaceRecoveryNil sets the value for InPlaceRecovery to be an explicit nil
+func (o *ApsSlurmJobSpecInput) SetInPlaceRecoveryNil() {
+	o.InPlaceRecovery.Set(nil)
+}
+
+// UnsetInPlaceRecovery ensures that no value is present for InPlaceRecovery, not even an explicit nil
+func (o *ApsSlurmJobSpecInput) UnsetInPlaceRecovery() {
+	o.InPlaceRecovery.Unset()
+}
+
 // GetAnomalyDetectionConfig returns the AnomalyDetectionConfig field value if set, zero value otherwise.
 func (o *ApsSlurmJobSpecInput) GetAnomalyDetectionConfig() AnomalyDetectionConfig {
 	if o == nil || IsNil(o.AnomalyDetectionConfig) {
@@ -531,6 +575,9 @@ func (o ApsSlurmJobSpecInput) ToMap() (map[string]interface{}, error) {
 	if o.Nvrx.IsSet() {
 		toSerialize["nvrx"] = o.Nvrx.Get()
 	}
+	if o.InPlaceRecovery.IsSet() {
+		toSerialize["in_place_recovery"] = o.InPlaceRecovery.Get()
+	}
 	if !IsNil(o.AnomalyDetectionConfig) {
 		toSerialize["anomaly_detection_config"] = o.AnomalyDetectionConfig
 	}
@@ -570,6 +617,7 @@ func (o *ApsSlurmJobSpecInput) UnmarshalJSON(data []byte) (err error) {
 		delete(additionalProperties, "requeue_on_completion")
 		delete(additionalProperties, "log_file_paths_shared_across_attempts")
 		delete(additionalProperties, "nvrx")
+		delete(additionalProperties, "in_place_recovery")
 		delete(additionalProperties, "anomaly_detection_config")
 		delete(additionalProperties, "dag_dependencies")
 		delete(additionalProperties, "dag_action")

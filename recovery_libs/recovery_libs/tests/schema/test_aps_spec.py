@@ -14,6 +14,7 @@ from recovery_libs.schema.aps_spec.spec import (
     DagActionEnum,
     DagDependencyStep,
     DagTriggerConditionEnum,
+    InPlaceRecoveryEnum,
     JobReferenceById,
     JobReferenceByName,
 )
@@ -78,6 +79,20 @@ class TestApsSlurmJobSpec(unittest.TestCase):
         spec = ApsSlurmJobSpec()
         self.assertIsInstance(spec.anomaly_detection_config, AnomalyDetectionConfig)
         self.assertTrue(spec.anomaly_detection_config.log_based_crash_enabled)
+
+    def test_in_place_recovery_defaults_to_none(self):
+        """A job that declares no mechanism keeps today's recovery by requeue"""
+        self.assertIsNone(ApsSlurmJobSpec().in_place_recovery)
+
+    def test_in_place_recovery_parses_prrte_from_a_job_comment(self):
+        """A job declaring PRRTE in its APS comment reaches the spec with that mechanism"""
+        spec = ApsSlurmJobSpec.model_validate_json(json.dumps({"in_place_recovery": "prrte"}))
+        self.assertEqual(spec.in_place_recovery, InPlaceRecoveryEnum.PRRTE)
+
+    def test_in_place_recovery_rejects_an_unknown_mechanism(self):
+        """A misspelled mechanism must fail validation rather than silently fall back to requeue"""
+        with self.assertRaises(ValidationError):
+            ApsSlurmJobSpec(in_place_recovery="prte")
 
     def test_nvrx_validation_valid_values(self):
         """Test that nvrx accepts valid values"""

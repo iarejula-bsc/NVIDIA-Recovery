@@ -399,7 +399,7 @@
             },
             "get": {
                 "summary": "Get Jobs",
-                "description": "Query all available jobs.\n\nGET /jobs\nRetrieves a list of job execution records with optional filtering, pagination, and sorting.\n\nThis endpoint returns job execution data based on various query parameters such as job ID, user, job name, state, and time-based filters. The response includes full job records by default.\n\nQuery Parameters:\ncomplete_data (bool, deprecated):\nDeprecated. Previously used to toggle between full and partial job records. Now always returns full job records.\n\njob_id (str, optional):\nFilter results by a specific job ID.\n\njob_attempt_index (str, optional):\nFilter by job attempt index. Note: Cannot be used on its own\u2014must be combined with job_id.\n\nuser (str, optional):\nFilter results by the username who submitted the job.\n\njob_name (str, optional):\nFilter results by the job name.\n\nworkflow_id (str, optional):\nFilter results by the exact canonical workflow ID.\n\njob_name_match (str, optional):\nHow to match job_name: \"prefix\" (default, starts with) or \"exact\".\n\nstate (str, optional):\nFilter by job state (e.g., Slurm job states).\nCannot be used together with completed_jobs.\n\ncompleted_jobs (bool, optional):\nFilter by job completion status.\nIf True, returns completed jobs; if False, returns running jobs.\nCannot be used with state.\n\nreconciliation_eligible_jobs (bool, default=False):\nReturn the state-based candidate set used to seed scheduler reconciliation:\nevery non-final job plus failure-like terminal jobs. COMPLETED and REQUEUED\nare excluded because their recovery is driven by exact-attempt Advice.\nCannot be used with state or completed_jobs.\n\noffset (int, default=0):\nNumber of records to skip (used for pagination).\n\ntime_filter_target (JobTimeFilterTarget, optional):\nSpecifies which job time field (created, started, etc.) to filter by.\nRequires either time_filter_from or time_filter_to.\n\ntime_filter_from (datetime, optional):\nStart of time range for the selected time filter target.\n\ntime_filter_to (datetime, optional):\nEnd of time range for the selected time filter target.\n\nsort_by (str, optional):\nComma-separated list of fields to sort by. Each field can specify order as asc or desc.\nExample: job_id:asc,job_attempt_index:desc\n\njob_group_id (str, optional):\nFilter by job group ID. Returns all job attempts belonging to this job group.\n\ninclude_job_group_attempts (bool, default=True):\nWhen job_group_id is not provided, controls whether to include job attempts that belong to a job group.\nWhen False, only returns standalone job attempts (not part of any job group).\nIgnored when job_group_id is provided.\n\nReturns:\nA JobExecutionStatuses object containing the list of job execution records that match the filter criteria.",
+                "description": "Query all available jobs.\n\nGET /jobs\nRetrieves a list of job execution records with optional filtering, pagination, and sorting.\n\nThis endpoint returns job execution data based on various query parameters such as job ID, user, job name, state, and time-based filters. The response includes full job records by default.\n\nQuery Parameters:\ncomplete_data (bool, deprecated):\nDeprecated. Previously used to toggle between full and partial job records. Now always returns full job records.\n\njob_id (str, optional):\nFilter results by a specific job ID.\n\njob_attempt_index (str, optional):\nFilter by job attempt index. Note: Cannot be used on its own—must be combined with job_id.\n\nuser (str, optional):\nFilter results by the username who submitted the job.\n\njob_name (str, optional):\nFilter results by the job name.\n\nworkflow_id (str, optional):\nFilter results by the exact canonical workflow ID.\n\njob_name_match (str, optional):\nHow to match job_name: \"prefix\" (default, starts with) or \"exact\".\n\nstate (str, optional):\nFilter by job state (e.g., Slurm job states).\nCannot be used together with completed_jobs.\n\ncompleted_jobs (bool, optional):\nFilter by job completion status.\nIf True, returns completed jobs; if False, returns running jobs.\nCannot be used with state.\n\nreconciliation_eligible_jobs (bool, default=False):\nReturn the state-based candidate set used to seed scheduler reconciliation:\nevery non-final job plus failure-like terminal jobs. COMPLETED and REQUEUED\nare excluded because their recovery is driven by exact-attempt Advice.\nCannot be used with state or completed_jobs.\n\noffset (int, default=0):\nNumber of records to skip (used for pagination).\n\ntime_filter_target (JobTimeFilterTarget, optional):\nSpecifies which job time field (created, started, etc.) to filter by.\nRequires either time_filter_from or time_filter_to.\n\ntime_filter_from (datetime, optional):\nStart of time range for the selected time filter target.\n\ntime_filter_to (datetime, optional):\nEnd of time range for the selected time filter target.\n\nsort_by (str, optional):\nComma-separated list of fields to sort by. Each field can specify order as asc or desc.\nExample: job_id:asc,job_attempt_index:desc\n\njob_group_id (str, optional):\nFilter by job group ID. Returns all job attempts belonging to this job group.\n\ninclude_job_group_attempts (bool, default=True):\nWhen job_group_id is not provided, controls whether to include job attempts that belong to a job group.\nWhen False, only returns standalone job attempts (not part of any job group).\nIgnored when job_group_id is provided.\n\nReturns:\nA JobExecutionStatuses object containing the list of job execution records that match the filter criteria.",
                 "operationId": "get_jobs",
                 "parameters": [
                     {
@@ -2082,7 +2082,8 @@
                     "TARGET_STATE_FINAL",
                     "SUCCESSOR_ALREADY_RUNNING",
                     "INVALID_RECOMMENDATION",
-                    "UNSUPPORTED_RECOMMENDATION"
+                    "UNSUPPORTED_RECOMMENDATION",
+                    "RESTARTED_IN_PLACE"
                 ],
                 "title": "AdviceReconciliationReason",
                 "description": "Bounded machine-readable reasons for Advice reconciliation status."
@@ -2259,6 +2260,16 @@
                         "title": "Nvrx",
                         "default": "disabled"
                     },
+                    "in_place_recovery": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/InPlaceRecoveryEnum"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
                     "anomaly_detection_config": {
                         "$ref": "#/components/schemas/AnomalyDetectionConfig"
                     },
@@ -2289,7 +2300,7 @@
                 },
                 "type": "object",
                 "title": "ApsSlurmJobSpec",
-                "description": "APS Slurm Job Spec, today this spec should be passed to APS as a JSON string included in the \"comment\" of a Slurm\njob.\n\nAttributes:\n    workflow_id (Optional[str]): The workflow this Slurm job belongs to.\n    workflow_name (Optional[str]): Deprecated alias for workflow_id.\n    environment (Optional[str]): The APS/NVIDIA Recovery environment that the job should be managed by, if not specified,\n        the job will be managed by the \"prod\" environment.\n    auto_resume_mode (Optional[AutoResumeModeEnum]): The auto resume mode for the job.\n    max_requeue_times (Optional[PositiveInt]): The max number of requeue that will happen to the job. Only\n        applicable when auto_resume_mode is set to REQUEUE. If not specified, the system wide max job attempt limit\n        will be used. Note that the max requeue times will be capped at the system wide limit too.\n    requeue_on_completion (Optional[bool]): Whether to requeue the job on normal completion. Default is None which\n        means it follows the system wide default. Setting it to either True or False will override the system wide\n        default. Only meaningful when auto_resume_mode is set to REQUEUE.\n    log_file_paths_shared_across_attempts (bool): Whether requeued attempts intentionally write to the same log\n        files. Defaults to False, which requires unique per-attempt paths and protects event correlation from\n        stale paths returned by Slurm during a requeue race.\n    nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is \"disabled\".\n    anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to\n        AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use\n        AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the\n        job enters FAILED state. Use AnomalyDetectionConfig(log_based_timeout_enabled=False) to suppress\n        log-based no-output (HANGNOOUTPUT) anomalies, or override\n        log_based_timeout_threshold_pretraining / log_based_timeout_threshold_trainingloop to tune the\n        per-phase silence window before a HANGNOOUTPUT anomaly may fire.\n    dag_dependencies (Optional[list[DagDependencyStep]]): DAG dependencies that must be satisfied before this\n        job can run. Each step specifies a dependency job and a trigger condition. The current job will only be\n        eligible for execution when all dependencies are met.\n    dag_action (Optional[DagActionEnum]): The action to take on this job after all its dag_dependencies are\n        satisfied. For example, RELEASE will release the job so it becomes eligible for scheduling."
+                "description": "APS Slurm Job Spec, today this spec should be passed to APS as a JSON string included in the \"comment\" of a Slurm\njob.\n\nAttributes:\n    workflow_id (Optional[str]): The workflow this Slurm job belongs to.\n    workflow_name (Optional[str]): Deprecated alias for workflow_id.\n    environment (Optional[str]): The APS/NVIDIA Recovery environment that the job should be managed by, if not specified,\n        the job will be managed by the \"prod\" environment.\n    auto_resume_mode (Optional[AutoResumeModeEnum]): The auto resume mode for the job.\n    max_requeue_times (Optional[PositiveInt]): The max number of requeue that will happen to the job. Only\n        applicable when auto_resume_mode is set to REQUEUE. If not specified, the system wide max job attempt limit\n        will be used. Note that the max requeue times will be capped at the system wide limit too.\n    requeue_on_completion (Optional[bool]): Whether to requeue the job on normal completion. Default is None which\n        means it follows the system wide default. Setting it to either True or False will override the system wide\n        default. Only meaningful when auto_resume_mode is set to REQUEUE.\n    log_file_paths_shared_across_attempts (bool): Whether requeued attempts intentionally write to the same log\n        files. Defaults to False, which requires unique per-attempt paths and protects event correlation from\n        stale paths returned by Slurm during a requeue race.\n    nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is \"disabled\".\n    in_place_recovery (Optional[InPlaceRecoveryEnum]): The mechanism that recovers this job inside its own\n        allocation after it loses nodes. None, the default, means the job has none and is recovered by requeue.\n    anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to\n        AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use\n        AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the\n        job enters FAILED state. Use AnomalyDetectionConfig(log_based_timeout_enabled=False) to suppress\n        log-based no-output (HANGNOOUTPUT) anomalies, or override\n        log_based_timeout_threshold_pretraining / log_based_timeout_threshold_trainingloop to tune the\n        per-phase silence window before a HANGNOOUTPUT anomaly may fire.\n    dag_dependencies (Optional[list[DagDependencyStep]]): DAG dependencies that must be satisfied before this\n        job can run. Each step specifies a dependency job and a trigger condition. The current job will only be\n        eligible for execution when all dependencies are met.\n    dag_action (Optional[DagActionEnum]): The action to take on this job after all its dag_dependencies are\n        satisfied. For example, RELEASE will release the job so it becomes eligible for scheduling."
             },
             "ApsSlurmJobSpec-Output": {
                 "properties": {
@@ -2377,6 +2388,16 @@
                         "title": "Nvrx",
                         "default": "disabled"
                     },
+                    "in_place_recovery": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/InPlaceRecoveryEnum"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
                     "anomaly_detection_config": {
                         "$ref": "#/components/schemas/AnomalyDetectionConfig"
                     },
@@ -2407,7 +2428,7 @@
                 },
                 "type": "object",
                 "title": "ApsSlurmJobSpec",
-                "description": "APS Slurm Job Spec, today this spec should be passed to APS as a JSON string included in the \"comment\" of a Slurm\njob.\n\nAttributes:\n    workflow_id (Optional[str]): The workflow this Slurm job belongs to.\n    workflow_name (Optional[str]): Deprecated alias for workflow_id.\n    environment (Optional[str]): The APS/NVIDIA Recovery environment that the job should be managed by, if not specified,\n        the job will be managed by the \"prod\" environment.\n    auto_resume_mode (Optional[AutoResumeModeEnum]): The auto resume mode for the job.\n    max_requeue_times (Optional[PositiveInt]): The max number of requeue that will happen to the job. Only\n        applicable when auto_resume_mode is set to REQUEUE. If not specified, the system wide max job attempt limit\n        will be used. Note that the max requeue times will be capped at the system wide limit too.\n    requeue_on_completion (Optional[bool]): Whether to requeue the job on normal completion. Default is None which\n        means it follows the system wide default. Setting it to either True or False will override the system wide\n        default. Only meaningful when auto_resume_mode is set to REQUEUE.\n    log_file_paths_shared_across_attempts (bool): Whether requeued attempts intentionally write to the same log\n        files. Defaults to False, which requires unique per-attempt paths and protects event correlation from\n        stale paths returned by Slurm during a requeue race.\n    nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is \"disabled\".\n    anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to\n        AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use\n        AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the\n        job enters FAILED state. Use AnomalyDetectionConfig(log_based_timeout_enabled=False) to suppress\n        log-based no-output (HANGNOOUTPUT) anomalies, or override\n        log_based_timeout_threshold_pretraining / log_based_timeout_threshold_trainingloop to tune the\n        per-phase silence window before a HANGNOOUTPUT anomaly may fire.\n    dag_dependencies (Optional[list[DagDependencyStep]]): DAG dependencies that must be satisfied before this\n        job can run. Each step specifies a dependency job and a trigger condition. The current job will only be\n        eligible for execution when all dependencies are met.\n    dag_action (Optional[DagActionEnum]): The action to take on this job after all its dag_dependencies are\n        satisfied. For example, RELEASE will release the job so it becomes eligible for scheduling."
+                "description": "APS Slurm Job Spec, today this spec should be passed to APS as a JSON string included in the \"comment\" of a Slurm\njob.\n\nAttributes:\n    workflow_id (Optional[str]): The workflow this Slurm job belongs to.\n    workflow_name (Optional[str]): Deprecated alias for workflow_id.\n    environment (Optional[str]): The APS/NVIDIA Recovery environment that the job should be managed by, if not specified,\n        the job will be managed by the \"prod\" environment.\n    auto_resume_mode (Optional[AutoResumeModeEnum]): The auto resume mode for the job.\n    max_requeue_times (Optional[PositiveInt]): The max number of requeue that will happen to the job. Only\n        applicable when auto_resume_mode is set to REQUEUE. If not specified, the system wide max job attempt limit\n        will be used. Note that the max requeue times will be capped at the system wide limit too.\n    requeue_on_completion (Optional[bool]): Whether to requeue the job on normal completion. Default is None which\n        means it follows the system wide default. Setting it to either True or False will override the system wide\n        default. Only meaningful when auto_resume_mode is set to REQUEUE.\n    log_file_paths_shared_across_attempts (bool): Whether requeued attempts intentionally write to the same log\n        files. Defaults to False, which requires unique per-attempt paths and protects event correlation from\n        stale paths returned by Slurm during a requeue race.\n    nvrx (Optional[bool]): Whether the job is enabled for NVRX. Default is \"disabled\".\n    in_place_recovery (Optional[InPlaceRecoveryEnum]): The mechanism that recovers this job inside its own\n        allocation after it loses nodes. None, the default, means the job has none and is recovered by requeue.\n    anomaly_detection_config (AnomalyDetectionConfig): Anomaly detection configuration. Defaults to\n        AnomalyDetectionConfig() (all log-based detections enabled with default thresholds). Use\n        AnomalyDetectionConfig(log_based_crash_enabled=False) to generate a CRASH anomaly immediately when the\n        job enters FAILED state. Use AnomalyDetectionConfig(log_based_timeout_enabled=False) to suppress\n        log-based no-output (HANGNOOUTPUT) anomalies, or override\n        log_based_timeout_threshold_pretraining / log_based_timeout_threshold_trainingloop to tune the\n        per-phase silence window before a HANGNOOUTPUT anomaly may fire.\n    dag_dependencies (Optional[list[DagDependencyStep]]): DAG dependencies that must be satisfied before this\n        job can run. Each step specifies a dependency job and a trigger condition. The current job will only be\n        eligible for execution when all dependencies are met.\n    dag_action (Optional[DagActionEnum]): The action to take on this job after all its dag_dependencies are\n        satisfied. For example, RELEASE will release the job so it becomes eligible for scheduling."
             },
             "AutoResumeModeEnum": {
                 "type": "string",
@@ -2683,6 +2704,14 @@
                 },
                 "type": "object",
                 "title": "HTTPValidationError"
+            },
+            "InPlaceRecoveryEnum": {
+                "type": "string",
+                "enum": [
+                    "prrte"
+                ],
+                "title": "InPlaceRecoveryEnum",
+                "description": "This enum class names the mechanism that recovers the job inside its own allocation after it loses nodes.\n\nPRRTE: the job's PRRTE runtime replaces the blamed nodes on order, quarantining them and growing the allocation by\n    as many nodes, then relaunches the application. NVIDIA Recovery orders it instead of requeueing the job."
             },
             "Issue-Input": {
                 "properties": {
@@ -3118,7 +3147,7 @@
                     "dag_dependencies"
                 ],
                 "title": "ListDagDependenciesResponse",
-                "description": "Response model for listing DAG dependency records. The response is paginated \u2014\nitem_count reflects the total number of matching records, not the page size."
+                "description": "Response model for listing DAG dependency records. The response is paginated —\nitem_count reflects the total number of matching records, not the page size."
             },
             "NodeAnalysisResponse": {
                 "properties": {
@@ -3519,7 +3548,8 @@
                     "slurm.requeue_hold",
                     "slurm.update_constraints",
                     "slurm.release",
-                    "slurm.cancel"
+                    "slurm.cancel",
+                    "slurm.restart_in_allocation"
                 ],
                 "title": "RecoverySchedulerAction"
             },
@@ -3945,6 +3975,11 @@
                             }
                         ],
                         "title": "Checkpoints"
+                    },
+                    "restarted_in_place": {
+                        "type": "boolean",
+                        "title": "Restarted In Place",
+                        "default": false
                     },
                     "aps_spec": {
                         "anyOf": [
@@ -4372,6 +4407,11 @@
                             }
                         ],
                         "title": "Checkpoints"
+                    },
+                    "restarted_in_place": {
+                        "type": "boolean",
+                        "title": "Restarted In Place",
+                        "default": false
                     },
                     "aps_spec": {
                         "anyOf": [

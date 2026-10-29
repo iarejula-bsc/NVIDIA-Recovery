@@ -42,6 +42,7 @@ from recovery_libs.storage.dataclass import (
     RecoveryMilestoneRecord,
     RecoverySequenceRecord,
     SlurmJobExecutionRecord,
+    SlurmJobFinalStates,
     WorkflowRecord,
 )
 from recovery_libs.storage.mysql_connection import MySQLConnection
@@ -967,6 +968,8 @@ class MySQLStorage(BaseStorage):
             # Claim-owned: only claim_attribution_request_emission() sets it. A general update must
             # never reset the claimed flag, or a later terminal update would re-emit AttributionRequest.
             update_values.pop("attribution_request_emitted", None)
+            # Owned by mark_attempt_restarted_in_place() for the same reason.
+            update_values.pop("restarted_in_place", None)
             with self.connection.session() as session:
                 known_record_query = select(SlurmJobExecutionRecord).where(SlurmJobExecutionRecord.job_id == job_id)
                 if job_attempt_index is None:
@@ -1640,7 +1643,9 @@ class MySQLStorage(BaseStorage):
                 if existing is not None:
                     old_record = deepcopy(existing)
                     make_transient(old_record)
-                    desired_state_changed = self._advice_desired_state_changed(existing, advice)
+                    desired_state_changed = self._advice_desired_state_changed(
+                        existing, advice
+                    ) or self._advice_restarts_again_after_restart_in_place(session, existing, advice)
                     # Canonicalize heimdall_id to the job record's UUID
                     if existing.heimdall_id != advice.heimdall_id:
                         existing.heimdall_id = advice.heimdall_id
@@ -1707,6 +1712,37 @@ class MySQLStorage(BaseStorage):
             or any(advice.node_exclusions or [])
             or any(advice.node_inclusions or [])
         )
+
+    @staticmethod
+    def _advice_restarts_again_after_restart_in_place(session, existing: AdviceRecord, incoming: AdviceRecord) -> bool:
+        """Whether a restart answers a failure of an attempt already restarted in place.
+
+        A restart in place converges the Advice while the attempt keeps running.
+        A job restarted that way ends itself if it fails again, and attribution
+        of an attempt restarted in place waits for the attempt to end, so the
+        restart that follows leaves the desired state unchanged. It is still a
+        new request and needs a new generation, or no controller would act on
+        it. The attempt having ended after the restart in place is what proves
+        a new failure: a writer replaying the applied restart, or attribution
+        of the repaired failure, only happens while the job keeps running.
+        """
+        if existing.advice_state != AdviceState.RESTARTED.value or incoming.advice_state != AdviceState.RESTARTED.value:
+            return False
+        restarted_in_place = any(
+            status.observed_generation == existing.generation
+            and status.disposition == AdviceReconciliationDisposition.CONVERGED.value
+            and status.reason == AdviceReconciliationReason.RESTARTED_IN_PLACE.value
+            for status in existing.reconciliation_statuses
+        )
+        if not restarted_in_place:
+            return False
+        attempt = session.scalars(
+            select(SlurmJobExecutionRecord).where(
+                SlurmJobExecutionRecord.job_id == incoming.job_id,
+                SlurmJobExecutionRecord.job_attempt_index == incoming.attempt_index,
+            )
+        ).first()
+        return attempt is not None and attempt.state in {state.value for state in SlurmJobFinalStates}
 
     @staticmethod
     def _advice_desired_state_changed(existing: AdviceRecord, incoming: AdviceRecord) -> bool:
@@ -1794,6 +1830,13 @@ class MySQLStorage(BaseStorage):
                     session.add(status_record)
                     persisted = status_record
 
+                if (
+                    status_record.disposition == AdviceReconciliationDisposition.CONVERGED.value
+                    and status_record.reason == AdviceReconciliationReason.RESTARTED_IN_PLACE.value
+                    and status_record.observed_generation == advice.generation
+                ):
+                    self._mark_attempt_restarted_in_place(session, advice.job_id, advice.attempt_index)
+
                 session.commit()
                 session.refresh(persisted)
                 session.expunge(persisted)
@@ -1803,6 +1846,25 @@ class MySQLStorage(BaseStorage):
         except Exception as e:
             logger.exception("Failed to upsert advice reconciliation status", extra={"error": str(e)})
             raise RecoveryStorageException(f"Failed to upsert advice reconciliation status: {e}") from e
+
+    @staticmethod
+    def _mark_attempt_restarted_in_place(session, job_id: str, job_attempt_index: int) -> None:
+        """Record that the attempt was restarted inside its allocation, once.
+
+        A restart in place keeps the attempt, while recovery is modeled per
+        attempt: the attribution request is emitted once per attempt. Reopening
+        that claim lets a later failure of the same attempt be attributed and
+        recovered like a fresh attempt. The conditional update makes this happen
+        at most once per attempt, which matches the controller restarting an
+        attempt in place at most once, and keeps status retries idempotent.
+        """
+        session.connection().execute(
+            update(SlurmJobExecutionRecord)
+            .where(SlurmJobExecutionRecord.job_id == job_id)
+            .where(SlurmJobExecutionRecord.job_attempt_index == job_attempt_index)
+            .where(SlurmJobExecutionRecord.restarted_in_place.is_(False))
+            .values(restarted_in_place=True, attribution_request_emitted=False)
+        )
 
     def _attach_recovery_context_to_advice(self, session, advice: AdviceRecord) -> None:
         operation_by_state = {

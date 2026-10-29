@@ -126,6 +126,7 @@ Class | Method | HTTP request | Description
  - [GetWorkflowsResponse](docs/GetWorkflowsResponse.md)
  - [GlobalEvent](docs/GlobalEvent.md)
  - [HTTPValidationError](docs/HTTPValidationError.md)
+ - [InPlaceRecoveryEnum](docs/InPlaceRecoveryEnum.md)
  - [IssueInput](docs/IssueInput.md)
  - [IssueOutput](docs/IssueOutput.md)
  - [JobAnomaly](docs/JobAnomaly.md)

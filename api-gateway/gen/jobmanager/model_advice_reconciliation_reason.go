@@ -28,6 +28,7 @@ const (
 	ADVICERECONCILIATIONREASON_SUCCESSOR_ALREADY_RUNNING  AdviceReconciliationReason = "SUCCESSOR_ALREADY_RUNNING"
 	ADVICERECONCILIATIONREASON_INVALID_RECOMMENDATION     AdviceReconciliationReason = "INVALID_RECOMMENDATION"
 	ADVICERECONCILIATIONREASON_UNSUPPORTED_RECOMMENDATION AdviceReconciliationReason = "UNSUPPORTED_RECOMMENDATION"
+	ADVICERECONCILIATIONREASON_RESTARTED_IN_PLACE         AdviceReconciliationReason = "RESTARTED_IN_PLACE"
 )
 
 // All allowed values of AdviceReconciliationReason enum
@@ -40,6 +41,7 @@ var AllowedAdviceReconciliationReasonEnumValues = []AdviceReconciliationReason{
 	"SUCCESSOR_ALREADY_RUNNING",
 	"INVALID_RECOMMENDATION",
 	"UNSUPPORTED_RECOMMENDATION",
+	"RESTARTED_IN_PLACE",
 }
 
 func (v *AdviceReconciliationReason) UnmarshalJSON(src []byte) error {
