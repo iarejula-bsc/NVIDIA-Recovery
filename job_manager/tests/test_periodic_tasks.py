@@ -295,6 +295,7 @@ def test_generated_crash_anomaly_trace_propagates_to_direct_attribution():
             routing_key="job.attribution",
             enabled=True,
             straggler_enabled=False,
+            attempt_is_final=True,
         )
 
     provider = TracerProvider()

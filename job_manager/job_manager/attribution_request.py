@@ -10,7 +10,13 @@ The emitter fires once per job attempt that carries an ADI-processable anomaly. 
 does not require the attempt to be terminal: hang, straggler and watcher-detected
 anomalies are attributed while the job is still running (and COMPLETING), regardless
 of final state. Emission is de-duped via an atomic claim in storage; only the caller
-that wins the claim publishes. The gate/flag/routing are passed in so this stays pure
+that wins the claim publishes.
+
+An attempt already restarted inside its allocation is the exception: recovery is
+modeled per attempt, and such an attempt ends itself if it fails again instead of
+recovering in place a second time. Attributing it while it keeps running would
+answer the failure already repaired, so emission waits until the attempt is final.
+The gate/flag/routing are passed in so this stays pure
 and testable; the wiring reads them from config.
 """
 
@@ -58,6 +64,7 @@ def emit_attribution_request_if_needed(
     routing_key: str,
     enabled: bool,
     straggler_enabled: bool,
+    attempt_is_final: bool,
     recovery_context_provider: Callable[[], Context | None] | None = None,
 ) -> bool:
     """Emit a AttributionRequest event to ADI for an anomalous attempt, exactly once.
@@ -65,11 +72,19 @@ def emit_attribution_request_if_needed(
     The attempt does not need to be terminal — ADI attribution runs on running,
     COMPLETING and final jobs alike (hang / straggler / watcher anomalies). Returns
     True if this call emitted the event; False otherwise (disabled, no processable
-    anomaly, claim lost, or publish failed). The claim is taken before publishing so a
+    anomaly, attempt restarted in place still running, claim lost, or publish failed). The claim is taken before publishing so a
     retry cannot double-emit; a publish failure after a won claim is surfaced via a
     dedicated metric rather than retried, to keep at-most-once semantics.
     """
     if not enabled or publisher is None:
+        return False
+    if not attempt_is_final and record.restarted_in_place:
+        # No claim is taken, so the terminal-transition call emits once the attempt ends.
+        ATTRIBUTION_REQUEST_SKIPPED_COUNTER.labels(reason="in_place_recovery").inc()
+        logger.info(
+            f"AttributionRequest deferred for job {record.job_id} attempt {record.job_attempt_index} "
+            "until the attempt ends: it was already restarted inside its allocation."
+        )
         return False
     if not _has_adi_processable_anomaly(record, straggler_enabled):
         ATTRIBUTION_REQUEST_SKIPPED_COUNTER.labels(reason="no_processable_anomaly").inc()

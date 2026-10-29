@@ -505,6 +505,7 @@ class JobManager:
             routing_key=event_bus.get("adi_attribution_request_routing_key", "job.updates.attribution_request"),
             enabled=self.config["service"].get("adi_attribution_request_emit_enabled", False),
             straggler_enabled=self.config["service"].get("adi_straggler_emit_enabled", False),
+            attempt_is_final=resolve_effective_final_state(record) is not None,
             recovery_context_provider=lambda: self._recovery_context_for_attribution(record),
         )
 

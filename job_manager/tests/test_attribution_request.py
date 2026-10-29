@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from job_manager.attribution_request import emit_attribution_request_if_needed
+from recovery_libs.schema.aps_spec.spec import ApsSlurmJobSpec, InPlaceRecoveryEnum
 from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.job_manager.models import JobAnomaly, JobAnomalyHandledBy
 from recovery_libs.schema.job_updates_attribution_request.attribution_request import AttributionRequest
@@ -32,7 +33,7 @@ def _terminal_record(anomalies=None):
     return record
 
 
-def _emit(record, *, storage=None, publisher="unset", enabled=True, straggler_enabled=False):
+def _emit(record, *, storage=None, publisher="unset", enabled=True, straggler_enabled=False, attempt_is_final=True):
     storage = storage or MagicMock()
     publisher = MagicMock() if publisher == "unset" else publisher
     result = emit_attribution_request_if_needed(
@@ -42,6 +43,7 @@ def _emit(record, *, storage=None, publisher="unset", enabled=True, straggler_en
         routing_key=ROUTING_KEY,
         enabled=enabled,
         straggler_enabled=straggler_enabled,
+        attempt_is_final=attempt_is_final,
     )
     return result, storage, publisher
 
@@ -65,9 +67,31 @@ class TestEmitAttributionRequest(unittest.TestCase):
         record.anomalies = [_anomaly()]
         storage = MagicMock()
         storage.claim_attribution_request_emission.return_value = True
-        result, storage, publisher = _emit(record, storage=storage)
+        result, storage, publisher = _emit(record, storage=storage, attempt_is_final=False)
         self.assertTrue(result)
         storage.claim_attribution_request_emission.assert_called_once()
+        publisher.publish_message.assert_called_once()
+
+    def test_attempt_restarted_in_allocation_waits_for_its_end_before_attribution_again(self):
+        # Once restarted in place, an attempt is recovered per attempt like any
+        # other: attributing it while it keeps running would answer the failure
+        # already repaired. A job that fails again ends itself, and that end is
+        # when the attempt is attributed again.
+        record = create_example_slurm_job_record(state="RUNNING")
+        record.aps_spec = ApsSlurmJobSpec(in_place_recovery=InPlaceRecoveryEnum.PRRTE)
+        record.anomalies = [_anomaly()]
+        record.restarted_in_place = True
+        storage = MagicMock()
+        storage.claim_attribution_request_emission.return_value = True
+
+        result, storage, publisher = _emit(record, storage=storage, attempt_is_final=False)
+        self.assertFalse(result)
+        storage.claim_attribution_request_emission.assert_not_called()
+        publisher.publish_message.assert_not_called()
+
+        record.state = "FAILED"
+        result, storage, publisher = _emit(record, storage=storage, attempt_is_final=True)
+        self.assertTrue(result)
         publisher.publish_message.assert_called_once()
 
     def test_no_anomaly_is_noop(self):
