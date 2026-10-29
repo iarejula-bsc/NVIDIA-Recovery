@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# The srun PRRTE starts its daemons with, minus --external-launcher, which makes
+# Slurm end the whole daemon step when one daemon ends despite --no-kill. The
+# real srun is the next one on PATH after this wrapper's directory.
+set -euo pipefail
+
+self=$(cd "$(dirname "$0")" && pwd)
+real=$(PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vx "$self" | paste -sd:) command -v srun)
+args=()
+for arg in "$@"; do
+  if [[ "$arg" == --external-launcher ]]; then
+    args+=(--overlap)
+  else
+    args+=("$arg")
+  fi
+done
+exec "$real" "${args[@]}"

@@ -1,6 +1,7 @@
-# Slurm cluster (Slinky) with a claim-backed shared home and two compute nodes.
-# Each disposable compute identity is pinned to one labeled Kind worker and may
-# write only that worker's exact /var/log/syslog file for trusted E2E fixtures.
+# Slurm cluster (Slinky) with a claim-backed shared home and two compute nodes,
+# plus three PRRTE nodes in the restart-in-allocation run. Each disposable
+# compute identity is pinned to one labeled Kind worker and may write only that
+# worker's exact /var/log/syslog file for trusted E2E fixtures.
 global:
   security:
     # Permit the legacy Bitnami MariaDB image (consistent with the NVIDIA Recovery chart).
@@ -120,6 +121,114 @@ compute:
         config:
           State: UP
           MaxTime: UNLIMITED
+
+    # Restart in allocation (E2E_RESTART_IN_ALLOCATION): nodes whose image
+    # carries the PRRTE runtime, in their own partition.
+    - name: prrte-a
+      enabled: __E2E_PRRTE_ENABLED__
+      replicas: 1
+      updateStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 1
+      priorityClassName: heimdall-e2e-compute
+      image:
+        repository: __E2E_PRRTE_IMAGE_REPOSITORY__
+        tag: __E2E_PRRTE_IMAGE_TAG__
+      nodeSelector:
+        heimdall.nvidia.com/slurm-node: prrte-a-0
+      extraVolumeMounts:
+        - name: home-storage
+          mountPath: /home
+        - name: node-syslog
+          mountPath: /var/log/syslog
+      extraVolumes:
+        - name: home-storage
+          persistentVolumeClaim:
+            claimName: slurm-shared-home
+        - name: node-syslog
+          hostPath:
+            path: /var/log/syslog
+            type: FileOrCreate
+      partition:
+        enabled: false
+    - name: prrte-b
+      enabled: __E2E_PRRTE_ENABLED__
+      replicas: 1
+      updateStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 1
+      priorityClassName: heimdall-e2e-compute
+      image:
+        repository: __E2E_PRRTE_IMAGE_REPOSITORY__
+        tag: __E2E_PRRTE_IMAGE_TAG__
+      nodeSelector:
+        heimdall.nvidia.com/slurm-node: prrte-b-0
+      extraVolumeMounts:
+        - name: home-storage
+          mountPath: /home
+        - name: node-syslog
+          mountPath: /var/log/syslog
+      extraVolumes:
+        - name: home-storage
+          persistentVolumeClaim:
+            claimName: slurm-shared-home
+        - name: node-syslog
+          hostPath:
+            path: /var/log/syslog
+            type: FileOrCreate
+      partition:
+        enabled: false
+    - name: prrte-c
+      enabled: __E2E_PRRTE_ENABLED__
+      replicas: 1
+      updateStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 1
+      priorityClassName: heimdall-e2e-compute
+      image:
+        repository: __E2E_PRRTE_IMAGE_REPOSITORY__
+        tag: __E2E_PRRTE_IMAGE_TAG__
+      nodeSelector:
+        heimdall.nvidia.com/slurm-node: prrte-c-0
+      extraVolumeMounts:
+        - name: home-storage
+          mountPath: /home
+        - name: node-syslog
+          mountPath: /var/log/syslog
+      extraVolumes:
+        - name: home-storage
+          persistentVolumeClaim:
+            claimName: slurm-shared-home
+        - name: node-syslog
+          hostPath:
+            path: /var/log/syslog
+            type: FileOrCreate
+      partition:
+        enabled: false
+  # The default partition keeps to the e2e nodes so other scenarios never take
+  # a PRRTE node.
+  partitions:
+    - name: all
+      enabled: true
+      nodesets:
+        - e2e-a
+        - e2e-b
+      config:
+        State: UP
+        Default: "YES"
+        MaxTime: UNLIMITED
+    - name: prrte
+      enabled: __E2E_PRRTE_ENABLED__
+      nodesets:
+        - prrte-a
+        - prrte-b
+        - prrte-c
+      config:
+        State: UP
+        MaxTime: UNLIMITED
 
 accounting:
   image:

@@ -268,6 +268,18 @@ a fresh stack with:
 E2E_ENABLE_EAGER_REQUEUE=1 E2E_SCENARIOS=56-eager-requeue make e2e
 ```
 
+`58-restart-in-allocation` is work in progress: it needs PRRTE fixes that are
+not in an upstream release yet, so it skips unless restart in allocation is
+enabled. With `E2E_RESTART_IN_ALLOCATION`, the harness creates three more Kind
+workers, builds the PRRTE slurmd image from `scripts/ci/e2e/images/slurmd-prrte`
+(several minutes), adds the `prrte` partition, and enables restart in allocation
+in the controller. It needs Attribution, the default:
+
+```bash
+DEPLOY_INFRA=1 DEPLOY_STACK=1 E2E_RESTART_IN_ALLOCATION=1 \
+  E2E_SCENARIOS=58-restart-in-allocation make e2e
+```
+
 For direct pytest iteration on that same ready stack:
 
 ```bash

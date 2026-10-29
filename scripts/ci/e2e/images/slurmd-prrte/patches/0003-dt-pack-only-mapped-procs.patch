@@ -1,0 +1,80 @@
+--- a/src/runtime/data_type_support/prte_dt_packing_fns.c
++++ b/src/runtime/data_type_support/prte_dt_packing_fns.c
+@@ -353,16 +353,49 @@
+             }
+         }
+ 
+-        /* ...and then what the maps cannot say, in rank order */
+-        for (j = 0; j < job->procs->size; j++) {
+-            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, j))) {
+-                continue;
++        /* ...and then what the maps cannot say, in rank order.
++         *
++         * Only for the ranks the maps above named: the unpacker creates a
++         * proc object for exactly those.  They are normally every proc of
++         * the job, but a recoverable job that has lost ranks keeps them in
++         * job->procs after they leave their node's proc array, and packing
++         * them here desynchronized every daemon that later received the
++         * job - the first broadcast after a node loss killed the DVM. */
++        {
++            bool *mapped = (bool *) calloc(job->procs->size, sizeof(bool));
++            prte_node_t *mnode;
++            prte_proc_t *mproc;
++            int mn, mp;
++            if (NULL == mapped) {
++                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
++                return PRTE_ERR_OUT_OF_RESOURCE;
+             }
+-            rc = prte_proc_pack(bkt, proc, devices, mode);
+-            if (PRTE_SUCCESS != rc) {
+-                PRTE_ERROR_LOG(rc);
+-                return rc;
++            for (mn = 0; mn < job->map->nodes->size; mn++) {
++                mnode = (prte_node_t *) pmix_pointer_array_get_item(job->map->nodes, mn);
++                if (NULL == mnode) {
++                    continue;
++                }
++                for (mp = 0; mp < mnode->procs->size; mp++) {
++                    mproc = (prte_proc_t *) pmix_pointer_array_get_item(mnode->procs, mp);
++                    if (NULL != mproc && PMIX_CHECK_NSPACE(job->nspace, mproc->name.nspace)
++                        && (int) mproc->name.rank < job->procs->size) {
++                        mapped[mproc->name.rank] = true;
++                    }
++                }
+             }
++            for (j = 0; j < job->procs->size; j++) {
++                if (!mapped[j]
++                    || NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, j))) {
++                    continue;
++                }
++                rc = prte_proc_pack(bkt, proc, devices, mode);
++                if (PRTE_SUCCESS != rc) {
++                    PRTE_ERROR_LOG(rc);
++                    free(mapped);
++                    return rc;
++                }
++            }
++            free(mapped);
+         }
+     }
+ 
+--- a/src/runtime/data_type_support/prte_dt_unpacking_fns.c
++++ b/src/runtime/data_type_support/prte_dt_unpacking_fns.c
+@@ -252,13 +252,13 @@
+         applist = NULL;
+     }
+ 
+-    /* and now what the maps could not say, in rank order */
++    /* and now what the maps could not say, in rank order - for the ranks
++     * the maps named, which is what the packer sends (a recoverable job
++     * that lost ranks has fewer of them than num_procs) */
+     for (j = 0; j < (int) jptr->num_procs; j++) {
+         proc = (prte_proc_t *) pmix_pointer_array_get_item(jptr->procs, j);
+         if (NULL == proc) {
+-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+-            rc = PRTE_ERR_NOT_FOUND;
+-            goto cleanup;
++            continue;
+         }
+         rc = prte_proc_unpack(bkt, proc, devices, mode);
+         if (PRTE_SUCCESS != rc) {

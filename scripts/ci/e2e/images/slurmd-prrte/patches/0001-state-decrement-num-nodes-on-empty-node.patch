@@ -1,0 +1,14 @@
+--- a/src/mca/state/base/state_base_fns.c
++++ b/src/mca/state/base/state_base_fns.c
+@@ -1166,6 +1166,11 @@
+         if (node_idx < INT_MAX) {
+             /* set the node location to NULL */
+             pmix_pointer_array_set_item(map->nodes, node_idx, NULL);
++            /* keep num_nodes equal to the non-NULL entries: the job packer
++             * writes it ahead of the node names, and a recoverable job that
++             * outlives a node would otherwise ship a map no daemon can
++             * unpack the next time the DVM broadcasts its jobs */
++            --map->num_nodes;
+         }
+         /* flag that the node is no longer in a map.  This must happen BEFORE
+          * the release below: the map holds a reference, and dropping it can

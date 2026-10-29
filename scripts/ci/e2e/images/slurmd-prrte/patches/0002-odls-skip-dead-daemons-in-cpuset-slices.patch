@@ -1,0 +1,16 @@
+--- a/src/mca/odls/base/odls_base_default_fns.c
++++ b/src/mca/odls/base/odls_base_default_fns.c
+@@ -753,6 +753,13 @@
+             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+             return PRTE_ERR_NOT_FOUND;
+         }
++        /* A daemon lost under a recoverable job stays in the node pool, so a
++         * later launch can still map onto its node.  It can receive nothing,
++         * and failing the send here aborted the whole launch - a spawn onto a
++         * replacement node failed because an unrelated node had died. */
++        if (!PRTE_FLAG_TEST(node->daemon, PRTE_PROC_FLAG_ALIVE)) {
++            continue;
++        }
+         if (node->daemon->name.rank == PRTE_PROC_MY_NAME->rank) {
+             /* our own procs are already bound in our own job object -
+              * construct_child_list keeps that copy and discards the

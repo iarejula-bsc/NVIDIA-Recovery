@@ -1,0 +1,35 @@
+--- a/src/mca/errmgr/dvm/errmgr_dvm.c
++++ b/src/mca/errmgr/dvm/errmgr_dvm.c
+@@ -456,6 +456,15 @@
+             PRTE_FLAG_UNSET(pptr, PRTE_PROC_FLAG_ALIVE);
+             /* update the state */
+             pptr->state = state;
++            /* and its node with it: nothing can run there until a daemon
++             * reports from it again, which puts it back UP.  Without this
++             * the node stayed UP in the pool, so a job that survived the
++             * loss could have its next spawn mapped onto it, and allocation
++             * queries kept listing it to the clients that size their
++             * requests by them. */
++            if (NULL != pptr->node) {
++                pptr->node->state = PRTE_NODE_STATE_DOWN;
++            }
+             /* adjust our num_procs */
+             --prte_process_info.num_daemons;
+             /* if this daemon was the target of an in-progress grow campaign,
+--- a/src/prted/pmix/pmix_server_queries.c
++++ b/src/prted/pmix/pmix_server_queries.c
+@@ -1163,6 +1163,14 @@
+                     if (NULL == node) {
+                         continue;
+                     }
++                    /* a node whose daemon was lost holds nothing a client can
++                     * use - the same rule the slot count query applies.  A
++                     * client sizing work by this list would otherwise place
++                     * it on the dead node, or take it for a newly granted
++                     * one once it had dropped it from its own view. */
++                    if (PRTE_NODE_STATE_DOWN == node->state) {
++                        continue;
++                    }
+                     PMIX_INFO_LIST_START(nodeinfolist);
+                     /* start with the node name */
+                     PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME, node->name, PMIX_STRING);

@@ -87,6 +87,7 @@ main() {
   log "  E2E_TEMPO_SERVICE   = ${E2E_TEMPO_SERVICE:-${E2E_TEMPO_URL:-<disabled>}}"
   log "  E2E_OTLP_LOGS       = $(enabled "$E2E_OTLP_LOGS" && echo on || echo off)"
   log "  DEPLOY_GPU_SCRAPE   = $(enabled "$DEPLOY_GPU_SCRAPE" && echo on || echo off)"
+  log "  RESTART_IN_ALLOCATION = $(enabled "$E2E_RESTART_IN_ALLOCATION" && echo on || echo off)"
   log "  DEPLOY_STACK        = $(enabled "$DEPLOY_STACK" && echo on || echo off)"
   log "  DEV_CI_TIMEOUT      = $DEV_CI_TIMEOUT"
   log "  TILT_LOG_SOURCE     = ${TILT_LOG_SOURCE:-all}"

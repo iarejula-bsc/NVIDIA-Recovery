@@ -1,0 +1,22 @@
+--- a/src/mca/plm/slurm/plm_slurm_module.c
++++ b/src/mca/plm/slurm/plm_slurm_module.c
+@@ -166,7 +166,9 @@
+  * destroyed the session for that job ID, so the launcher termination is
+  * expected. If the session remains but only the HNP node survives, the shrink
+  * removed every daemon task launched by this srun step while leaving the
+- * controlling node alive.
++ * controlling node alive.  A node whose daemon was lost counts as gone too:
++ * once every daemon task of the step has been lost, srun ends, and that end
++ * reports the losses the DVM has already survived, not a new failure.
+  */
+ static bool srun_exit_expected(uint32_t job_id)
+ {
+@@ -189,7 +191,7 @@
+ 
+     for (int i = 0; i < session->nodes->size; i++) {
+         node = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, i);
+-        if (NULL == node) {
++        if (NULL == node || PRTE_NODE_STATE_DOWN == node->state) {
+             continue;
+         }
+         remaining = node;

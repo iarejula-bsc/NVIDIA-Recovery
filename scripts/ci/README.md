@@ -161,6 +161,7 @@ any non-empty value is on.
 | `KEEP_CLUSTER` | Leaves an owned cluster running after success or failure. |
 | `DEV_CI_TIMEOUT` | Bounds Tilt environment convergence; default `90m`. |
 | `E2E_SCENARIOS` | Space-separated exact scenario directory names; unknown names fail pytest collection. |
+| `E2E_RESTART_IN_ALLOCATION` | Non-empty adds the PRRTE nodes, their Kind workers and image, and enables restart in allocation for `58-restart-in-allocation` (work in progress). |
 | `E2E_LOG_BACKEND` | Selects `loki` (default) or `victorialogs` for deployment, collection, and evidence. |
 | `LOKI_URL` / `E2E_LOKI_URL` | Local Loki connection; an explicit empty value disables Loki-dependent scenarios. |
 | `VICTORIALOGS_URL` / `E2E_VICTORIALOGS_URL` | Local VictoriaLogs connection, defaulting to `http://victorialogs.monitoring.svc.cluster.local:9428` when selected and infrastructure is deployed. |

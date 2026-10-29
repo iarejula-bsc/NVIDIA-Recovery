@@ -1,0 +1,17 @@
+--- a/src/prted/pmix/pmix_server_queries.c
++++ b/src/prted/pmix/pmix_server_queries.c
+@@ -1171,6 +1171,14 @@
+                     if (PRTE_NODE_STATE_DOWN == node->state) {
+                         continue;
+                     }
++                    /* nor does a node released from the DVM: the shrink resets
++                     * it to a never-launched node with no daemon, kept in the
++                     * pool only so a later grow can relaunch one there.  The
++                     * mapper already passes it over; listing it would tell a
++                     * client the DVM is as large as before the release. */
++                    if (NULL == node->daemon) {
++                        continue;
++                    }
+                     PMIX_INFO_LIST_START(nodeinfolist);
+                     /* start with the node name */
+                     PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME, node->name, PMIX_STRING);

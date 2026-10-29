@@ -11,8 +11,10 @@ local.file_match "system_logs" {
 }
 
 // The disposable topology pins e2e-a-0 to Kind's first worker and e2e-b-0 to
-// its second. Keep the mapping fail-closed: an unknown collector target is not
-// allowed to emit a guessed scheduler node identity.
+// its second. The restart-in-allocation topology adds prrte-a-0, prrte-b-0 and
+// prrte-c-0 on its fourth to sixth workers. Keep the mapping fail-closed: an
+// unknown collector target is not allowed to emit a guessed scheduler node
+// identity.
 discovery.relabel "system_logs" {
 	targets = local.file_match.system_logs.targets
 
@@ -28,6 +30,27 @@ discovery.relabel "system_logs" {
 		regex         = ".*-worker2"
 		target_label  = "node_name"
 		replacement   = "e2e-b-0"
+	}
+
+	rule {
+		source_labels = ["host_node"]
+		regex         = ".*-worker4"
+		target_label  = "node_name"
+		replacement   = "prrte-a-0"
+	}
+
+	rule {
+		source_labels = ["host_node"]
+		regex         = ".*-worker5"
+		target_label  = "node_name"
+		replacement   = "prrte-b-0"
+	}
+
+	rule {
+		source_labels = ["host_node"]
+		regex         = ".*-worker6"
+		target_label  = "node_name"
+		replacement   = "prrte-c-0"
 	}
 
 	rule {
