@@ -36,6 +36,7 @@ type Recorder struct {
 	adviceActions            *prometheus.CounterVec
 	adviceStatusPublications *prometheus.CounterVec
 	failedRequeues           *prometheus.CounterVec
+	growJobCancels           *prometheus.CounterVec
 	commandTimeouts          *prometheus.CounterVec
 	modeDecisions            *prometheus.CounterVec
 	environmentAdmissions    *prometheus.CounterVec
@@ -141,6 +142,7 @@ var reconcileStages = []reconcile.ReconcileStage{
 	reconcile.StageJobReconciliation,
 	reconcile.StageFailedJobReconciliation,
 	reconcile.StageAdviceReconciliation,
+	reconcile.StageGrowJobReconciliation,
 }
 
 // NewRegistry returns an isolated Prometheus registry with standard Go and
@@ -244,6 +246,10 @@ func NewRecorder(reg prometheus.Registerer) *Recorder {
 		failedRequeues: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "slurm_advisor_controller_failed_requeues_total",
 			Help: "Total number of direct failed-job requeuehold actions by outcome and mode.",
+		}, []string{"outcome", "mode"}),
+		growJobCancels: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "slurm_advisor_controller_grow_job_cancels_total",
+			Help: "Total number of grow jobs cancelled after the job attempt they grew stopped running, by outcome and mode.",
 		}, []string{"outcome", "mode"}),
 		modeDecisions: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "slurm_advisor_controller_job_mode_decisions_total",
@@ -545,6 +551,9 @@ func (r *Recorder) ObserveSync(obs reconcile.SyncObservation) {
 	}
 	for _, requeue := range obs.FailedRequeues {
 		addPositiveCount(r.failedRequeues.WithLabelValues(string(requeue.Outcome), string(requeue.Mode)), requeue.Count)
+	}
+	for _, cancel := range obs.GrowJobCancels {
+		addPositiveCount(r.growJobCancels.WithLabelValues(string(cancel.Outcome), string(cancel.Mode)), cancel.Count)
 	}
 	for _, decision := range obs.ModeDecisions {
 		addPositiveCount(r.modeDecisions.WithLabelValues(

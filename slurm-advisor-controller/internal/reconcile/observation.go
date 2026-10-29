@@ -56,6 +56,7 @@ const (
 	StageJobReconciliation       ReconcileStage = "job_reconciliation"
 	StageFailedJobReconciliation ReconcileStage = "failed_job_reconciliation"
 	StageAdviceReconciliation    ReconcileStage = "advice_reconciliation"
+	StageGrowJobReconciliation   ReconcileStage = "grow_job_reconciliation"
 )
 
 // JobUpsertSource records which snapshot source produced a Heimdall job upsert.
@@ -111,6 +112,7 @@ type SyncObservation struct {
 	AdviceActions                  []ActionObservation
 	AdviceStatusPublications       []AdviceStatusPublicationObservation
 	FailedRequeues                 []OutcomeCountObservation
+	GrowJobCancels                 []OutcomeCountObservation
 	ModeDecisions                  []ModeDecisionObservation
 	EnvironmentAdmissions          []EnvironmentAdmissionObservation
 	JobAttemptCache                JobAttemptCacheObservation
@@ -318,6 +320,17 @@ func observeFailedRequeue(obs *SyncObservation, mode OperationMode, outcome Obse
 		return
 	}
 	obs.FailedRequeues = append(obs.FailedRequeues, OutcomeCountObservation{
+		Mode:    mode,
+		Outcome: outcome,
+		Count:   1,
+	})
+}
+
+func observeGrowJobCancel(obs *SyncObservation, mode OperationMode, outcome ObservationOutcome) {
+	if obs == nil {
+		return
+	}
+	obs.GrowJobCancels = append(obs.GrowJobCancels, OutcomeCountObservation{
 		Mode:    mode,
 		Outcome: outcome,
 		Count:   1,

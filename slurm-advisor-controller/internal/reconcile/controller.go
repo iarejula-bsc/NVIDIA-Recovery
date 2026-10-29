@@ -232,6 +232,14 @@ func (c *Controller) SyncOnce(ctx context.Context) (result ControllerSyncResult,
 	observeStage(&observation, StageAdviceReconciliation, phaseErr, time.Since(stageStartedAt))
 	result.Advice = adviceResult
 	actionErrs = append(actionErrs, phaseErr)
+
+	if c.Options.RestartInAllocation && ctx.Err() == nil {
+		observeStageStarted(observer, StageGrowJobReconciliation)
+		stageStartedAt = time.Now()
+		phaseErr = c.reconcileGrowJobs(ctx, snapshot, &observation)
+		observeStage(&observation, StageGrowJobReconciliation, phaseErr, time.Since(stageStartedAt))
+		actionErrs = append(actionErrs, phaseErr)
+	}
 	return result, joinActionErrors(ctx, actionErrs)
 }
 
