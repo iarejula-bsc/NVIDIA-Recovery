@@ -37,6 +37,15 @@ def collector_deployment(namespace: str) -> CausalEvidence:
         _kubectl(namespace, "get", "pods", "--selector", "app.kubernetes.io/name=alloy", "--output", "json"),
         _kubectl(namespace, "get", "serviceaccount", "alloy", "--output", "json"),
         _kubectl(namespace, "get", "deployment", "alloy-application", "--output", "json"),
+        _kubectl(
+            namespace,
+            "get",
+            "nodes",
+            "--selector",
+            "heimdall.nvidia.com/slurm-worker=true",
+            "--output",
+            "jsonpath={.items[*].metadata.name}",
+        ).split(),
     )
 
 

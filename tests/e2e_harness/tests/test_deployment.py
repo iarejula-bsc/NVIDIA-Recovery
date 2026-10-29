@@ -77,6 +77,9 @@ def _pods() -> dict:
     }
 
 
+SYSLOG_NODES = ("heimdall-e2e-worker", "heimdall-e2e-worker2")
+
+
 def _deployment() -> dict:
     return {
         "metadata": {"name": "alloy-application"},
@@ -89,9 +92,31 @@ def test_collector_claim_and_sandbox_contract_is_observed() -> None:
         json.dumps(_pods()),
         json.dumps({"automountServiceAccountToken": False}),
         json.dumps(_deployment()),
+        SYSLOG_NODES,
     )
 
     assert evidence.observed, evidence.summary
+
+
+def test_collector_conformance_follows_the_labeled_workers() -> None:
+    # The restart-in-allocation topology labels one more worker per PRRTE node.
+    pods = _pods()
+    pods["items"].insert(2, _pod("alloy", "heimdall-e2e-worker4"))
+    evidence = evaluate_collector_deployment(
+        json.dumps(pods),
+        json.dumps({"automountServiceAccountToken": False}),
+        json.dumps(_deployment()),
+        (*SYSLOG_NODES, "heimdall-e2e-worker4"),
+    )
+    assert evidence.observed, evidence.summary
+
+    missing = evaluate_collector_deployment(
+        json.dumps(_pods()),
+        json.dumps({"automountServiceAccountToken": False}),
+        json.dumps(_deployment()),
+        (*SYSLOG_NODES, "heimdall-e2e-worker4"),
+    )
+    assert not missing.observed
 
 
 @pytest.mark.parametrize(
@@ -157,7 +182,9 @@ def test_collector_conformance_goes_red_for_mutations(mutation: str) -> None:
     else:
         deployment["spec"]["strategy"]["type"] = "RollingUpdate"
 
-    evidence = evaluate_collector_deployment(json.dumps(pods), json.dumps(service_account), json.dumps(deployment))
+    evidence = evaluate_collector_deployment(
+        json.dumps(pods), json.dumps(service_account), json.dumps(deployment), SYSLOG_NODES
+    )
 
     assert not evidence.observed
 

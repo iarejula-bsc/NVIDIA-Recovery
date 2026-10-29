@@ -6,18 +6,31 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Collection
 
 from e2e_harness.recovery import CausalEvidence
 
 
-def evaluate_collector_deployment(pods_text: str, service_account_text: str, deployment_text: str) -> CausalEvidence:
-    """Check runtime collector ownership, durable positions, and restricted mounts."""
+def evaluate_collector_deployment(
+    pods_text: str, service_account_text: str, deployment_text: str, syslog_nodes: Collection[str]
+) -> CausalEvidence:
+    """Check runtime collector ownership, durable positions, and restricted mounts.
+
+    Args:
+        pods_text: `kubectl get pods -o json` of the Alloy collectors.
+        service_account_text: `kubectl get serviceaccount alloy -o json`.
+        deployment_text: `kubectl get deployment alloy-application -o json`.
+        syslog_nodes: The Kind workers labeled for a Slurm node, each of which needs one syslog collector.
+    """
+    want_syslog = len(syslog_nodes)
     try:
         pod_items = json.loads(pods_text)["items"]
         service_account = json.loads(service_account_text)
         deployment = json.loads(deployment_text)
-        if len(pod_items) != 3:
-            return CausalEvidence(False, f"Alloy pods={len(pod_items)}, want two syslog and one application collector")
+        if len(pod_items) != want_syslog + 1:
+            return CausalEvidence(
+                False, f"Alloy pods={len(pod_items)}, want {want_syslog} syslog and one application collector"
+            )
     except (KeyError, TypeError, json.JSONDecodeError) as error:
         return CausalEvidence(False, f"invalid Alloy runtime manifest: {error}")
 
@@ -133,14 +146,10 @@ def evaluate_collector_deployment(pods_text: str, service_account_text: str, dep
         if positions.get("mountPath") != "/var/lib/alloy-positions" or positions.get("readOnly", False) is not False:
             failures.append(prefix + f"positions mount={positions!r}")
 
-    if instances != {"alloy": 2, "alloy-application": 1}:
-        failures.append(f"collector instances={instances!r}, want two syslog and one application collector")
-    if (
-        len(observed_nodes) != 2
-        or not any(node.endswith("-worker") for node in observed_nodes)
-        or not any(node.endswith("-worker2") for node in observed_nodes)
-    ):
-        failures.append(f"collector nodes={sorted(observed_nodes)!r}, want distinct Kind worker and worker2 targets")
+    if instances != {"alloy": want_syslog, "alloy-application": 1}:
+        failures.append(f"collector instances={instances!r}, want {want_syslog} syslog and one application collector")
+    if observed_nodes != set(syslog_nodes):
+        failures.append(f"collector nodes={sorted(observed_nodes)!r}, want one on each of {sorted(syslog_nodes)!r}")
 
     summary = "Alloy collector deployment conforms" if not failures else "; ".join(failures)
     return CausalEvidence(not failures, summary)
