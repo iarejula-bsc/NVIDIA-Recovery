@@ -187,6 +187,34 @@ controller needs no privilege beyond the Slurm operator rights it already uses:
 - The controller cancels marked allocations once the attempt they served stops
   running, for example after such a requeue.
 
+`deploy/slurm/nvr-prrte-run` implements the job side with the PMIx and PRRTE
+command-line tools (`prte`, `prun`, `pquery`, `palloc`). The batch script ends
+with it in place of `prun`:
+
+```bash
+#SBATCH --nodes=4 --no-kill
+#SBATCH --comment='{"APS":{"in_place_recovery":"prrte","max_requeue_times":2}}'
+exec nvr-prrte-run -n 4 --map-by ppr:1:node python train.py --resume
+```
+
+It starts a PRRTE DVM over the allocation and runs the application. When the
+application fails, it waits for a restart order, carries it out, and relaunches
+the application once, which resumes from its own checkpoint. It exits 1, and
+the failed job is handled as usual, when no order is carried out within
+`NVR_PRRTE_ORDER_TIMEOUT` (default 300 seconds) or when the application fails
+again after the restart. The timeout must cover detection, attribution, and
+Advice for the failure. Restart in allocation needs PRRTE fixes that are in PRRTE master
+but not in a release yet; `scripts/ci/e2e/images/slurmd-prrte` builds a runtime
+from master.
+
+PRRTE starts its daemons with `srun --external-launcher --no-kill`, and Slurm
+drops `--no-kill` from such a step. Where `slurmctld` manages steps, which is
+the Slurm default, the failure of one node then kills the daemons on every node
+and the order falls back to a requeue. Clusters with
+`SlurmctldParameters=enable_stepmgr`, as Slinky configures, are not affected.
+Elsewhere, until Slurm keeps the flag, an `srun` earlier on the job's `PATH`
+that replaces `--external-launcher` with `--overlap` avoids it.
+
 Replace `HEIMDALL_ENDPOINT` (recorded during backend installation),
 `SLURM_ADVISOR_ENVIRONMENT`, and the partition allowlist with your site values.
 Also confirm `SLURM_ADVISOR_VERSIONED_SQUEUE_JSON`: set it to `true` only when
