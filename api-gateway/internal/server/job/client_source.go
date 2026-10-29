@@ -402,6 +402,13 @@ func recoveryConfigToApsSpecInput(config *v1.JobRecoveryConfig) (jobmanagerBindi
 	default:
 		return jobmanagerBindings.ApsSlurmJobSpecInput{}, status.Errorf(codes.InvalidArgument, "unsupported DAG action: %s", config.DagAction)
 	}
+	switch config.InPlaceRecovery {
+	case v1.JobRecoveryConfig_IN_PLACE_RECOVERY_UNSPECIFIED:
+	case v1.JobRecoveryConfig_IN_PLACE_RECOVERY_PRRTE:
+		apsSpec.SetInPlaceRecovery(jobmanagerBindings.INPLACERECOVERYENUM_PRRTE)
+	default:
+		return jobmanagerBindings.ApsSlurmJobSpecInput{}, status.Errorf(codes.InvalidArgument, "unsupported in_place_recovery: %s", config.InPlaceRecovery)
+	}
 
 	return apsSpec, nil
 }
@@ -428,6 +435,9 @@ func apsSpecOutputToRecoveryConfig(apsSpec jobmanagerBindings.ApsSlurmJobSpecOut
 	}
 	if environment, ok := apsSpec.GetEnvironmentOk(); ok && environment != nil {
 		config.Environment = environment
+	}
+	if mechanism, ok := apsSpec.GetInPlaceRecoveryOk(); ok && mechanism != nil && *mechanism == jobmanagerBindings.INPLACERECOVERYENUM_PRRTE {
+		config.InPlaceRecovery = v1.JobRecoveryConfig_IN_PLACE_RECOVERY_PRRTE
 	}
 	if detection, ok := apsSpec.GetAnomalyDetectionConfigOk(); ok && detection != nil {
 		config.AnomalyDetectionConfig = &v1.JobAnomalyDetectionConfig{
@@ -1101,6 +1111,8 @@ func mapReconciliationReasonToProto(reason jobmanagerBindings.AdviceReconciliati
 		return v1.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_INVALID_RECOMMENDATION
 	case jobmanagerBindings.ADVICERECONCILIATIONREASON_UNSUPPORTED_RECOMMENDATION:
 		return v1.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_UNSUPPORTED_RECOMMENDATION
+	case jobmanagerBindings.ADVICERECONCILIATIONREASON_RESTARTED_IN_PLACE:
+		return v1.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_RESTARTED_IN_PLACE
 	default:
 		return v1.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_UNSPECIFIED
 	}
@@ -1165,6 +1177,8 @@ func mapReconciliationReasonToJobManager(reason v1.AdviceReconciliationReason) j
 		return jobmanagerBindings.ADVICERECONCILIATIONREASON_INVALID_RECOMMENDATION
 	case v1.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_UNSUPPORTED_RECOMMENDATION:
 		return jobmanagerBindings.ADVICERECONCILIATIONREASON_UNSUPPORTED_RECOMMENDATION
+	case v1.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_RESTARTED_IN_PLACE:
+		return jobmanagerBindings.ADVICERECONCILIATIONREASON_RESTARTED_IN_PLACE
 	default:
 		return ""
 	}
@@ -1180,6 +1194,8 @@ func recoverySchedulerActionToJobManager(action v1.RecoverySchedulerAction) (job
 		return jobmanagerBindings.RECOVERYSCHEDULERACTION_SLURM_RELEASE, nil
 	case v1.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL:
 		return jobmanagerBindings.RECOVERYSCHEDULERACTION_SLURM_CANCEL, nil
+	case v1.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_RESTART_IN_ALLOCATION:
+		return jobmanagerBindings.RECOVERYSCHEDULERACTION_SLURM_RESTART_IN_ALLOCATION, nil
 	default:
 		return "", status.Error(codes.InvalidArgument, "unsupported recovery scheduler action")
 	}

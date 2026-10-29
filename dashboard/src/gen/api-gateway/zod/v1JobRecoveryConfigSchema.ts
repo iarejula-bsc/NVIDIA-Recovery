@@ -5,6 +5,7 @@
 import * as z from 'zod'
 import { jobRecoveryConfigAutoResumeModeSchema } from './jobRecoveryConfigAutoResumeModeSchema'
 import { jobRecoveryConfigDagActionSchema } from './jobRecoveryConfigDagActionSchema'
+import { jobRecoveryConfigInPlaceRecoverySchema } from './jobRecoveryConfigInPlaceRecoverySchema'
 import { v1JobAnomalyDetectionConfigSchema } from './v1JobAnomalyDetectionConfigSchema'
 import { v1JobDagDependencySchema } from './v1JobDagDependencySchema'
 
@@ -16,4 +17,6 @@ export const v1JobRecoveryConfigSchema = z.object({
   dagDependencies: z.array(v1JobDagDependencySchema).optional().describe('Parent gates that must be satisfied before this job becomes eligible.'),
   dagAction: jobRecoveryConfigDagActionSchema.optional().default('DAG_ACTION_UNSPECIFIED').describe('Action to apply after all DAG dependencies are satisfied.'),
   environment: z.string().optional().describe('Optional APS routing environment preserved exactly from the scheduler job.'),
+  logFilePathsSharedAcrossAttempts: z.boolean().optional().describe('Whether requeued attempts intentionally write to the same log files.'),
+  inPlaceRecovery: jobRecoveryConfigInPlaceRecoverySchema.optional().default('IN_PLACE_RECOVERY_UNSPECIFIED').describe('Mechanism that recovers the job inside its allocation, if any.'),
 }).describe('JobRecoveryConfig contains typed recovery policy for scheduler jobs.')

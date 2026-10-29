@@ -1956,6 +1956,7 @@ func TestJobClientSource_CreateOrUpdateJob_WithRecoveryConfig(t *testing.T) {
 			RequeueOnCompletion:              &requeueOnCompletion,
 			LogFilePathsSharedAcrossAttempts: &sharedLogPaths,
 			Environment:                      &environment,
+			InPlaceRecovery:                  v1.JobRecoveryConfig_IN_PLACE_RECOVERY_PRRTE,
 			AnomalyDetectionConfig: &v1.JobAnomalyDetectionConfig{
 				LogBasedCrashEnabled:                &logBasedCrashEnabled,
 				LogBasedTimeoutEnabled:              &logBasedTimeoutEnabled,
@@ -1999,6 +2000,9 @@ func TestJobClientSource_CreateOrUpdateJob_WithRecoveryConfig(t *testing.T) {
 	}
 	if got.Environment == nil || *got.Environment != environment {
 		t.Fatalf("Environment = %v, want exact value %q", got.Environment, environment)
+	}
+	if got.InPlaceRecovery != v1.JobRecoveryConfig_IN_PLACE_RECOVERY_PRRTE {
+		t.Fatalf("InPlaceRecovery = %v, want PRRTE", got.InPlaceRecovery)
 	}
 	if got.AnomalyDetectionConfig == nil || got.AnomalyDetectionConfig.LogBasedCrashEnabled == nil || *got.AnomalyDetectionConfig.LogBasedCrashEnabled {
 		t.Fatalf("AnomalyDetectionConfig = %#v, want log-based crash false with presence", got.AnomalyDetectionConfig)

@@ -663,6 +663,19 @@ definitions:
 
        - DAG_ACTION_UNSPECIFIED: No DAG action was specified.
        - DAG_ACTION_RELEASE: Release the held child so it becomes scheduler-eligible.
+  JobRecoveryConfigInPlaceRecovery:
+    type: string
+    enum:
+      - IN_PLACE_RECOVERY_UNSPECIFIED
+      - IN_PLACE_RECOVERY_PRRTE
+    default: IN_PLACE_RECOVERY_UNSPECIFIED
+    description: |-
+      InPlaceRecovery names the mechanism that recovers the job inside its own
+      allocation after it loses nodes, so recovery can order it instead of
+      requeueing the whole job.
+
+       - IN_PLACE_RECOVERY_UNSPECIFIED: The job has no such mechanism and is recovered by requeue.
+       - IN_PLACE_RECOVERY_PRRTE: The job's PRRTE runtime replaces the blamed nodes on order.
   protobufAny:
     type: object
     properties:
@@ -782,6 +795,7 @@ definitions:
       - ADVICE_RECONCILIATION_REASON_SUCCESSOR_ALREADY_RUNNING
       - ADVICE_RECONCILIATION_REASON_INVALID_RECOMMENDATION
       - ADVICE_RECONCILIATION_REASON_UNSUPPORTED_RECOMMENDATION
+      - ADVICE_RECONCILIATION_REASON_RESTARTED_IN_PLACE
     default: ADVICE_RECONCILIATION_REASON_UNSPECIFIED
     description: |-
       AdviceReconciliationReason is a bounded explanation for a reconciliation disposition.
@@ -795,6 +809,8 @@ definitions:
        - ADVICE_RECONCILIATION_REASON_SUCCESSOR_ALREADY_RUNNING: A live successor cannot safely receive the required constraints.
        - ADVICE_RECONCILIATION_REASON_INVALID_RECOMMENDATION: The recommendation has no reconciliation path.
        - ADVICE_RECONCILIATION_REASON_UNSUPPORTED_RECOMMENDATION: The controller cannot implement the recommendation.
+       - ADVICE_RECONCILIATION_REASON_RESTARTED_IN_PLACE: A restart was applied inside the target's allocation, so the target keeps
+      its attempt instead of producing a successor.
   v1AdviceReconciliationStatus:
     type: object
     properties:
@@ -1306,6 +1322,9 @@ definitions:
       logFilePathsSharedAcrossAttempts:
         type: boolean
         description: Whether requeued attempts intentionally write to the same log files.
+      inPlaceRecovery:
+        $ref: '#/definitions/JobRecoveryConfigInPlaceRecovery'
+        description: Mechanism that recovers the job inside its allocation, if any.
     description: JobRecoveryConfig contains typed recovery policy for scheduler jobs.
   v1JobStatus:
     type: string
@@ -1498,6 +1517,7 @@ definitions:
       - RECOVERY_SCHEDULER_ACTION_SLURM_UPDATE_CONSTRAINTS
       - RECOVERY_SCHEDULER_ACTION_SLURM_RELEASE
       - RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL
+      - RECOVERY_SCHEDULER_ACTION_SLURM_RESTART_IN_ALLOCATION
     default: RECOVERY_SCHEDULER_ACTION_UNSPECIFIED
     description: |-
       RecoverySchedulerAction identifies one scheduler command occurrence.
@@ -1507,6 +1527,8 @@ definitions:
        - RECOVERY_SCHEDULER_ACTION_SLURM_UPDATE_CONSTRAINTS: Ask Slurm to update the target attempt's node constraints.
        - RECOVERY_SCHEDULER_ACTION_SLURM_RELEASE: Ask Slurm to release the target attempt from its hold.
        - RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL: Ask Slurm to cancel the job.
+       - RECOVERY_SCHEDULER_ACTION_SLURM_RESTART_IN_ALLOCATION: Restart the job inside its Slurm allocation: quarantine the blamed nodes
+      and replace the lost ones through the job's PRRTE runtime.
   v1RecoverySchedulerActionOutcome:
     type: string
     enum:

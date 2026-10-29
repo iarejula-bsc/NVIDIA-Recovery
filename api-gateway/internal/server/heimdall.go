@@ -350,7 +350,8 @@ func validRecoverySchedulerAction(action pb.RecoverySchedulerAction) bool {
 	case pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_REQUEUE_HOLD,
 		pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_UPDATE_CONSTRAINTS,
 		pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_RELEASE,
-		pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL:
+		pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL,
+		pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_RESTART_IN_ALLOCATION:
 		return true
 	default:
 		return false

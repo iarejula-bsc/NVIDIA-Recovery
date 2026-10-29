@@ -4,6 +4,7 @@
 
 import type { JobRecoveryConfigAutoResumeModeKey } from './JobRecoveryConfigAutoResumeMode'
 import type { JobRecoveryConfigDagActionKey } from './JobRecoveryConfigDagAction'
+import type { JobRecoveryConfigInPlaceRecoveryKey } from './JobRecoveryConfigInPlaceRecovery'
 import type { V1JobAnomalyDetectionConfig } from './V1JobAnomalyDetectionConfig'
 import type { V1JobDagDependency } from './V1JobDagDependency'
 
@@ -51,4 +52,15 @@ export interface V1JobRecoveryConfig {
      * @type string | undefined
     */
     environment?: string;
+    /**
+     * @description Whether requeued attempts intentionally write to the same log files.
+     * @type boolean | undefined
+    */
+    logFilePathsSharedAcrossAttempts?: boolean;
+    /**
+     * @description Mechanism that recovers the job inside its allocation, if any.
+     * @default 'IN_PLACE_RECOVERY_UNSPECIFIED'
+     * @type string | undefined
+    */
+    inPlaceRecovery?: JobRecoveryConfigInPlaceRecoveryKey;
 }

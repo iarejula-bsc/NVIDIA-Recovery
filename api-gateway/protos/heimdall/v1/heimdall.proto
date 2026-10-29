@@ -78,6 +78,16 @@ message JobRecoveryConfig {
     DAG_ACTION_RELEASE = 1;
   }
 
+  // InPlaceRecovery names the mechanism that recovers the job inside its own
+  // allocation after it loses nodes, so recovery can order it instead of
+  // requeueing the whole job.
+  enum InPlaceRecovery {
+    // The job has no such mechanism and is recovered by requeue.
+    IN_PLACE_RECOVERY_UNSPECIFIED = 0;
+    // The job's PRRTE runtime replaces the blamed nodes on order.
+    IN_PLACE_RECOVERY_PRRTE = 1;
+  }
+
   // Job-level auto-resume mode.
   AutoResumeMode auto_resume_mode = 1;
   // Maximum number of times a job can be requeued. Must be positive when present.
@@ -96,6 +106,8 @@ message JobRecoveryConfig {
   optional string environment = 8;
   // Whether requeued attempts intentionally write to the same log files.
   optional bool log_file_paths_shared_across_attempts = 9;
+  // Mechanism that recovers the job inside its allocation, if any.
+  InPlaceRecovery in_place_recovery = 10;
 }
 
 // JobAnomalyDetectionConfig contains per-job log detection controls.
@@ -416,6 +428,9 @@ enum RecoverySchedulerAction {
   RECOVERY_SCHEDULER_ACTION_SLURM_RELEASE = 3;
   // Ask Slurm to cancel the job.
   RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL = 4;
+  // Restart the job inside its Slurm allocation: quarantine the blamed nodes
+  // and replace the lost ones through the job's PRRTE runtime.
+  RECOVERY_SCHEDULER_ACTION_SLURM_RESTART_IN_ALLOCATION = 5;
 }
 
 // RecoverySchedulerActionOutcome classifies one scheduler action occurrence.
@@ -480,6 +495,9 @@ enum AdviceReconciliationReason {
   ADVICE_RECONCILIATION_REASON_INVALID_RECOMMENDATION = 7;
   // The controller cannot implement the recommendation.
   ADVICE_RECONCILIATION_REASON_UNSUPPORTED_RECOMMENDATION = 8;
+  // A restart was applied inside the target's allocation, so the target keeps
+  // its attempt instead of producing a successor.
+  ADVICE_RECONCILIATION_REASON_RESTARTED_IN_PLACE = 9;
 }
 
 // AdviceRecommendation represents the recommended state and node constraints.
