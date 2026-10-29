@@ -157,3 +157,46 @@ func TestDebugUpsertsEndpointIncludesSchedulerMetadata(t *testing.T) {
 		t.Fatalf("scheduler metadata log paths = %#v, want %#v", got, wantPaths)
 	}
 }
+
+// Controllers list only active Advice; like the backend, the mock stops
+// listing an Advice once its current generation is reported terminal, so a
+// harness scenario sees the same retry behavior as production.
+func TestServerActiveListingDropsAdviceReconciledInCurrentGeneration(t *testing.T) {
+	ctx := context.Background()
+	server := mockheimdall.NewServer([]*pb.Advice{
+		{HeimdallJobId: "converged"},
+		{HeimdallJobId: "older-generation", Generation: 2},
+		{HeimdallJobId: "in-progress"},
+	})
+	for adviceID, generation := range map[string]int64{"converged": 1, "older-generation": 1} {
+		if _, err := server.UpdateAdviceReconciliationStatus(ctx, &pb.UpdateAdviceReconciliationStatusRequest{
+			HeimdallJobId: adviceID,
+			Status: &pb.AdviceReconciliationStatus{
+				ObservedGeneration: generation,
+				Disposition:        pb.AdviceReconciliationDisposition_ADVICE_RECONCILIATION_DISPOSITION_CONVERGED,
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	onlyActive := true
+	active, err := server.ListAdvice(ctx, &pb.ListAdviceRequest{OnlyActive: &onlyActive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, item := range active.GetAdvice() {
+		got = append(got, item.GetHeimdallJobId())
+	}
+	if want := []string{"older-generation", "in-progress"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("active advice = %v, want %v", got, want)
+	}
+	all, err := server.ListAdvice(ctx, &pb.ListAdviceRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all.GetAdvice()) != 3 {
+		t.Fatalf("unfiltered advice = %v, want all three", all.GetAdvice())
+	}
+}

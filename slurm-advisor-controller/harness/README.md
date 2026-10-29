@@ -93,6 +93,15 @@ The scenario suite covers:
 - `SLURM_ADVISOR_ENABLE_EAGER_REQUEUE=true` explicitly restores eager
   `requeuehold` without Advice; the harness defaults this flag to false.
 - action-mode terminate advice converges through `scancel`.
+- action-mode restart advice for a job declaring PRRTE in-place recovery
+  orders a restart in the allocation (the order in the job's AdminComment and
+  SIGUSR2 to its batch script); the job (`jobs/in-allocation-job.sh` with
+  `jobs/restart-in-allocation.sh`, which grows it by a marked `prrte` allocation
+  as PRRTE does) carries it out, and the controller reports convergence once it
+  observes the grow without a requeue. A later Advice generation for the same
+  attempt requeues it, and the controller then cancels the marked allocation.
+- the same restart falls back to `requeuehold` and release when the job cannot
+  obtain a node within the restart timeout.
 - restart plus node-exclusion advice requeues into hold, then updates
   constraints before the job can run again.
 - API outage does not trigger scheduler mutation.

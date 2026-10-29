@@ -95,6 +95,7 @@ type debugAdvice struct {
 	AdviceID          string         `json:"advice_id"`
 	JobID             string         `json:"job_id"`
 	AttemptIndex      int32          `json:"attempt_index"`
+	Generation        int64          `json:"generation,omitempty"`
 	State             string         `json:"state,omitempty"`
 	Exclusions        []string       `json:"exclusions,omitempty"`
 	SchedulerMetadata map[string]any `json:"scheduler_metadata"`
@@ -307,6 +308,42 @@ func TestSafetyMatrix(t *testing.T) {
 
 		h.startController(controllerModeAct)
 		h.waitForPendingWithJobDetail(jobID, "ExcNodeList=c1")
+	})
+
+	h.runScenario("action restart of a PRRTE job grows it inside its allocation", func(h harness) {
+		jobID := h.submitJob("advisor-in-allocation", "--comment="+inAllocationComment(), inAllocationJob)
+		h.waitForSqueueState(jobID, slurmStateRunning)
+		h.putAdvice(restartAdvice(jobID))
+
+		h.startControllerWithRestartInAllocation()
+		h.waitForAdviceDisposition("restart-"+jobID, "ADVICE_RECONCILIATION_DISPOSITION_CONVERGED")
+		growJobID := h.waitForGrowJob(jobID, 0)
+		// No requeue: the same attempt keeps running.
+		if job := h.requireSqueueJob(jobID); job.State != slurmStateRunning || job.RestartCount != 0 {
+			h.t.Fatalf("job %s = %+v, want the first attempt still running", jobID, job)
+		}
+
+		// The same attempt fails again: a new Advice generation finds it already
+		// grown, so this restart is a requeue into a fresh attempt. The requeue
+		// ends the runtime without its shutdown, which leaves the grow job
+		// holding its node until the controller cancels it.
+		second := restartAdvice(jobID)
+		second.Generation = 2
+		h.putAdvice(second)
+		h.waitForRequeuedReleasedJob(jobID, 0)
+		h.waitForSqueueAbsence(growJobID)
+	})
+
+	h.runScenario("action restart of a PRRTE job requeues when no node can be granted", func(h harness) {
+		// The blocker takes the other node of the partition, so the grow
+		// cannot be granted.
+		h.submitRunningSleepJob("advisor-in-allocation-blocker")
+		jobID := h.submitJob("advisor-in-allocation-full", "--comment="+inAllocationComment(), inAllocationJob)
+		h.waitForSqueueState(jobID, slurmStateRunning)
+		h.putAdvice(restartAdvice(jobID))
+
+		h.startControllerWithRestartInAllocation()
+		h.waitForRequeuedReleasedJob(jobID, 0)
 	})
 
 	h.runScenario("action failure does not starve later terminate advice", func(h harness) {

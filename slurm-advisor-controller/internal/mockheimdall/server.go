@@ -23,6 +23,8 @@ type Server struct {
 	mu      sync.Mutex
 	upserts []*pb.CreateOrUpdateJobRequest
 	advice  []*pb.Advice
+	// statuses holds the latest reconciliation status reported per Advice.
+	statuses map[string]*pb.AdviceReconciliationStatus
 }
 
 func NewServer(advice []*pb.Advice) *Server {
@@ -89,6 +91,16 @@ func (s *Server) ListAdvice(_ context.Context, req *pb.ListAdviceRequest) (*pb.L
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	listed := s.advice
+	if req.GetOnlyActive() {
+		listed = make([]*pb.Advice, 0, len(s.advice))
+		for _, item := range s.advice {
+			if !s.reconciledLocked(item) {
+				listed = append(listed, item)
+			}
+		}
+	}
+
 	offset, err := strconv.Atoi(req.GetPage())
 	if err != nil || offset < 0 {
 		offset = 0
@@ -97,21 +109,49 @@ func (s *Server) ListAdvice(_ context.Context, req *pb.ListAdviceRequest) (*pb.L
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
-	if offset >= len(s.advice) {
+	if offset >= len(listed) {
 		return &pb.ListAdviceResponse{}, nil
 	}
 
-	end := min(offset+limit, len(s.advice))
+	end := min(offset+limit, len(listed))
 	resp := &pb.ListAdviceResponse{
-		Advice: append([]*pb.Advice(nil), s.advice[offset:end]...),
+		Advice: append([]*pb.Advice(nil), listed[offset:end]...),
 		Count:  int32(end - offset),
 	}
-	if end < len(s.advice) {
+	if end < len(listed) {
 		next := strconv.Itoa(end)
 		resp.NextPageToken = &next
 	}
 
 	return resp, nil
+}
+
+// UpdateAdviceReconciliationStatus records the status a controller reports for
+// one Advice generation, as the backend does.
+func (s *Server) UpdateAdviceReconciliationStatus(_ context.Context, req *pb.UpdateAdviceReconciliationStatusRequest) (*pb.UpdateAdviceReconciliationStatusResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.statuses == nil {
+		s.statuses = map[string]*pb.AdviceReconciliationStatus{}
+	}
+	s.statuses[req.GetHeimdallJobId()] = req.GetStatus()
+	return &pb.UpdateAdviceReconciliationStatusResponse{Status: req.GetStatus()}, nil
+}
+
+// reconciledLocked reports whether the Advice's current generation has a
+// terminal status, which takes it out of the active listing as in the backend.
+// An Advice without a generation is generation 1, as controllers read it.
+func (s *Server) reconciledLocked(advice *pb.Advice) bool {
+	status, ok := s.statuses[advice.GetHeimdallJobId()]
+	if !ok {
+		return false
+	}
+	generation := max(advice.GetGeneration(), 1)
+	disposition := status.GetDisposition()
+	return status.GetObservedGeneration() == generation &&
+		(disposition == pb.AdviceReconciliationDisposition_ADVICE_RECONCILIATION_DISPOSITION_CONVERGED ||
+			disposition == pb.AdviceReconciliationDisposition_ADVICE_RECONCILIATION_DISPOSITION_ABANDONED)
 }
 
 func jobFromUpsert(req *pb.CreateOrUpdateJobRequest) *pb.Job {
@@ -141,6 +181,7 @@ func (s *Server) SetAdvice(advice []*pb.Advice) {
 	defer s.mu.Unlock()
 
 	s.advice = append([]*pb.Advice(nil), advice...)
+	s.statuses = nil
 }
 
 func (s *Server) RegisterDebugHandlers(mux *http.ServeMux) {
@@ -151,6 +192,12 @@ func (s *Server) RegisterDebugHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/upserts", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(UpsertSummaries(s.Upserts())); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+	mux.HandleFunc("/advice-statuses", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(s.statusSummaries()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
@@ -207,6 +254,30 @@ func UpsertSummaries(requests []*pb.CreateOrUpdateJobRequest) []UpsertSummary {
 	return out
 }
 
+// AdviceStatusSummary is the debug view of a reported reconciliation status.
+type AdviceStatusSummary struct {
+	AdviceID           string `json:"advice_id"`
+	ObservedGeneration int64  `json:"observed_generation"`
+	Disposition        string `json:"disposition"`
+	Reason             string `json:"reason"`
+}
+
+func (s *Server) statusSummaries() []AdviceStatusSummary {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]AdviceStatusSummary, 0, len(s.statuses))
+	for adviceID, status := range s.statuses {
+		out = append(out, AdviceStatusSummary{
+			AdviceID:           adviceID,
+			ObservedGeneration: status.GetObservedGeneration(),
+			Disposition:        status.GetDisposition().String(),
+			Reason:             status.GetReason().String(),
+		})
+	}
+	return out
+}
+
 type AdviceSummary struct {
 	AdviceID     string `json:"advice_id"`
 	JobID        string `json:"job_id"`
@@ -229,9 +300,12 @@ func AdviceSummaries(advice []*pb.Advice) []AdviceSummary {
 }
 
 type DebugAdvice struct {
-	AdviceID          string         `json:"advice_id"`
-	JobID             string         `json:"job_id"`
-	AttemptIndex      int32          `json:"attempt_index"`
+	AdviceID     string `json:"advice_id"`
+	JobID        string `json:"job_id"`
+	AttemptIndex int32  `json:"attempt_index"`
+	// Generation is the Advice generation; zero leaves it unset, which
+	// controllers read as generation 1.
+	Generation        int64          `json:"generation"`
 	State             string         `json:"state"`
 	Inclusions        []string       `json:"inclusions"`
 	Exclusions        []string       `json:"exclusions"`
@@ -293,6 +367,7 @@ func buildAdviceItem(fixture DebugAdvice) (*pb.Advice, error) {
 		HeimdallJobId:     fixture.AdviceID,
 		JobId:             fixture.JobID,
 		AttemptIndex:      fixture.AttemptIndex,
+		Generation:        fixture.Generation,
 		SchedulerMetadata: metadata,
 		CreatedAt:         timestamppb.Now(),
 		Advice: &pb.AdviceRecommendation{
