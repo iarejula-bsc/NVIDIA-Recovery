@@ -187,6 +187,22 @@ controller needs no privilege beyond the Slurm operator rights it already uses:
 - The controller cancels marked allocations once the attempt they served stops
   running, for example after such a requeue.
 
+`deploy/slurm/nvr-prrte-run` implements the job side with the PMIx and PRRTE
+command-line tools (`prte`, `prun`, `pquery`, `palloc`). The batch script ends
+with it in place of `prun`:
+
+```bash
+#SBATCH --nodes=4 --no-kill
+#SBATCH --comment='{"APS":{"in_place_recovery":"prrte","max_requeue_times":2}}'
+exec nvr-prrte-run -n 4 --map-by ppr:1:node python train.py --resume
+```
+
+It starts a PRRTE DVM over the allocation, relaunches the application when it
+fails, carries out restart orders, and exits 1 when the application fails
+again after a restart in place. The application resumes from its own
+checkpoint. Restart in allocation needs PRRTE fixes that are not in an upstream
+release yet; `scripts/ci/e2e/images/slurmd-prrte` builds a runtime with them.
+
 Replace `HEIMDALL_ENDPOINT` (recorded during backend installation),
 `SLURM_ADVISOR_ENVIRONMENT`, and the partition allowlist with your site values.
 Also confirm `SLURM_ADVISOR_VERSIONED_SQUEUE_JSON`: set it to `true` only when

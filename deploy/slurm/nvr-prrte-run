@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# nvr-prrte-run: run an application under PRRTE so NVIDIA Recovery can restart
+# it inside the job's allocation.
+#
+# usage: nvr-prrte-run [prun options] <command> [args...]
+#
+# Run it from the batch script of a Slurm job that declares
+# "in_place_recovery": "prrte" in its APS comment. It starts a PRRTE DVM over
+# the allocation and runs the arguments with prun, relaunching the application
+# when it fails. On a restart order from NVIDIA Recovery (the
+# nvr-restart-in-allocation token in the job's AdminComment, then SIGUSR2 to
+# the batch script; see docs/operators/slurm.md) it:
+#
+#   1. stops the PRRTE daemon on each ordered node the DVM still spans;
+#   2. grows the DVM back to its starting size with palloc, which makes PRRTE
+#      allocate the missing nodes as a separate Slurm job;
+#   3. marks that job with Comment=prrte-grow-of=<job ID>.<restart count>;
+#   4. lets the relaunch loop start the application on the whole DVM, from
+#      its own checkpoint.
+#
+# An attempt is restarted in place once: if the application fails again after
+# that, nvr-prrte-run exits 1 and NVIDIA Recovery handles the failed job.
+#
+# Requires prte, prun, pterm, pquery and palloc on PATH. The batch script must
+# end with `exec nvr-prrte-run ...`: the order signal goes only to the batch
+# script's process.
+#
+# Environment:
+#   NVR_PRRTE_RESTART_TIMEOUT  seconds to obtain replacement nodes (default 90)
+#   NVR_PRRTE_RELAUNCH_DELAY   seconds between relaunches (default 5)
+#
+# Exit status: the application's 0 on success, 1 when it fails after a restart
+# in place, 2 on usage or environment errors.
+set -uo pipefail
+
+restart_timeout="${NVR_PRRTE_RESTART_TIMEOUT:-90}"
+relaunch_delay="${NVR_PRRTE_RELAUNCH_DELAY:-5}"
+grep_pattern='KEY: PMIX_HOSTNAME\\x0a.*?PMIX_STRING\tValue: \K[^\\]+'
+
+log() { echo "nvr-prrte-run $(date -u +%FT%TZ) $*" >&2; }
+
+if (( $# == 0 )); then
+  echo "usage: nvr-prrte-run [prun options] <command> [args...]" >&2
+  exit 2
+fi
+if [[ -z "${SLURM_JOB_ID:-}" || -z "${SLURM_JOB_NUM_NODES:-}" ]]; then
+  echo "nvr-prrte-run: not inside a Slurm job" >&2
+  exit 2
+fi
+for tool in prte prun pterm pquery palloc; do
+  if ! command -v "$tool" >/dev/null; then
+    echo "nvr-prrte-run: $tool is not on PATH" >&2
+    exit 2
+  fi
+done
+
+root_flag=()
+(( EUID == 0 )) && root_flag=(--allow-run-as-root)
+state_dir="$(mktemp -d "${TMPDIR:-/tmp}/nvr-prrte-run.$SLURM_JOB_ID.XXXXXX")"
+uri="$state_dir/dvm.uri"
+restarted="$state_dir/restarted-in-place"
+want="$SLURM_JOB_NUM_NODES"
+
+# live_nodes prints the nodes the DVM spans, one per line. pquery prints the
+# values on stderr.
+live_nodes() {
+  pquery --uri "file:$uri" PMIX_QUERY_ALLOCATION 2>&1 | grep -oP "$grep_pattern" | sort -u
+}
+
+# stop_daemon stops this job's PRRTE daemon on node, leaving other jobs' alone.
+stop_daemon() {
+  # shellcheck disable=SC2016 # expanded on the node
+  srun --overlap --nodes=1 --ntasks=1 --nodelist="$1" bash -c '
+    for pid in $(pgrep -u "$(id -u)" -x prted); do
+      if tr "\0" "\n" < "/proc/$pid/environ" | grep -qx "SLURM_JOB_ID=$SLURM_JOB_ID"; then
+        kill -TERM "$pid"
+      fi
+    done'
+}
+
+# mark_grow_jobs marks this user's unmarked prrte jobs on the given nodes as
+# grow jobs of this attempt.
+mark_grow_jobs() {
+  local job nodes comment node
+  while read -r job nodes comment; do
+    [[ "$comment" == "(null)" ]] || continue
+    for node in $(scontrol show hostnames "$nodes"); do
+      if grep -qx "$node" <<<"$1"; then
+        scontrol update "JobId=$job" "Comment=prrte-grow-of=$SLURM_JOB_ID.${SLURM_RESTART_COUNT:-0}" \
+          && log "grow job $job on $nodes marked"
+        break
+      fi
+    done
+  done < <(squeue --noheader --user="$(id -u)" --name=prrte --states=RUNNING --format='%i %N %k')
+}
+
+# restart_in_allocation carries out the order in the job's AdminComment. It
+# looks at the DVM before each step, so a repeated order does nothing more.
+restart_in_allocation() {
+  local order quarantine node before after missing deadline
+  order="$(scontrol show job "$SLURM_JOB_ID" | grep -o 'nvr-restart-in-allocation:[^ ]*' | head -1)"
+  IFS=: read -r _ _ _ _ quarantine <<<"$order"
+  log "restart order: ${order:-none}"
+  before="$(live_nodes)"
+  for node in ${quarantine//,/ }; do
+    grep -qx "$node" <<<"$before" || continue
+    stop_daemon "$node"
+    deadline=$((SECONDS + 30))
+    while grep -qx "$node" <<<"$(live_nodes)" && (( SECONDS < deadline )); do sleep 0.2; done
+    log "quarantined $node"
+  done
+  before="$(live_nodes)"
+  missing=$((want - $(grep -c . <<<"$before")))
+  if (( missing > 0 )); then
+    timeout "$restart_timeout" palloc --uri "file:$uri" --extend --nodes "$missing" >/dev/null 2>&1
+    deadline=$((SECONDS + restart_timeout))
+    while (( $(live_nodes | grep -c .) < want && SECONDS < deadline )); do sleep 0.5; done
+    after="$(live_nodes)"
+    mark_grow_jobs "$(comm -13 <(echo "$before") <(echo "$after"))"
+  fi
+  if (( $(live_nodes | grep -c .) >= want )); then
+    touch "$restarted"
+    log "restarted in allocation on $(live_nodes | paste -sd,)"
+  else
+    log "could not restart in allocation: the DVM spans $(live_nodes | paste -sd,)"
+  fi
+}
+
+on_order() {
+  ( flock -n 9 || exit 0; restart_in_allocation ) 9>"$state_dir/order.lock" &
+}
+
+prte "${root_flag[@]}" --report-uri "$uri" --prtemca prte_elastic_mode 1 &
+until [[ -s "$uri" ]] && prun "${root_flag[@]}" --dvm-uri "file:$uri" -n 1 true 2>/dev/null; do
+  sleep 1
+done
+trap on_order USR2
+trap 'pterm --dvm-uri "file:$uri" >/dev/null 2>&1; rm -rf "$state_dir"' EXIT
+
+while :; do
+  [[ -e "$restarted" ]] && after_restart=1 || after_restart=0
+  prun "${root_flag[@]}" --dvm-uri "file:$uri" "$@" &
+  app=$!
+  # The trap interrupts wait with a status above 128 while the application runs.
+  while :; do
+    wait "$app"
+    rc=$?
+    kill -0 "$app" 2>/dev/null || break
+  done
+  if (( rc == 0 )); then
+    exit 0
+  fi
+  if (( after_restart )); then
+    log "application failed after the restart in allocation (exit $rc)"
+    exit 1
+  fi
+  log "application failed (exit $rc); relaunching"
+  sleep "$relaunch_delay" &
+  wait $!
+done
