@@ -6,6 +6,7 @@ package slurm
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strconv"
 
 	"github.com/cockroachdb/errors"
@@ -147,7 +148,7 @@ func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
 
 	jobs := make([]cluster.JobExecutionRecord, 0, len(parsed.Jobs))
 	for _, jobID := range groupOrder {
-		for attemptIndex, attempt := range groupSacctAttempts(grouped[jobID]) {
+		for attemptIndex, attempt := range groupSacctAttempts(dropResizeSegments(grouped[jobID])) {
 			job, err := observedJobFromSacct(attempt[0], int32(attemptIndex))
 			if err != nil {
 				return nil, err
@@ -258,6 +259,27 @@ func jobIdentityFromSacct(job SacctJob) (jobID, arrayJobID, arrayTaskID string, 
 	}
 
 	return arrayJobID + "_" + arrayTaskID, arrayJobID, arrayTaskID, true
+}
+
+// dropResizeSegments removes the records Slurm writes for the part of an
+// attempt that ended in a resize, such as a --no-kill job losing a node.
+//
+// Slurm closes the running record with state PENDING|RESIZING and continues the
+// same attempt in a new record whose submission and start times are the resize
+// time. Grouping by those times would count the closed segment as an attempt
+// of its own, shift every later attempt index, and report the job PENDING with
+// the nodes it held before the resize. A RESIZING record is a closed segment
+// only when a later record of the same job follows it; the last record is
+// kept, because a job may be resizing right now.
+func dropResizeSegments(rawJobs []SacctJob) []SacctJob {
+	kept := make([]SacctJob, 0, len(rawJobs))
+	for i, raw := range rawJobs {
+		if i < len(rawJobs)-1 && slices.Contains(raw.State.Current, "RESIZING") {
+			continue
+		}
+		kept = append(kept, raw)
+	}
+	return kept
 }
 
 func groupSacctAttempts(rawJobs []SacctJob) [][]SacctJob {
