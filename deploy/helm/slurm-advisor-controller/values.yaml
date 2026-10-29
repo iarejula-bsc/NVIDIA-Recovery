@@ -76,6 +76,12 @@ controller:
   partitionAllowlist: []
   versionedSqueueJSON: true
   updateEligibleTimeAfterRequeue: false
+  # Opt-in: order running jobs that declare in_place_recovery "prrte" to
+  # restart inside their allocation instead of requeueing them. timeout bounds
+  # the wait for a job to carry out the order before it is requeued instead.
+  restartInAllocation:
+    enabled: false
+    timeout: 2m
   auditTrail:
     destination: gateway
     maxBatchSize: 100

@@ -577,6 +577,11 @@ if os.environ.get('DEPLOY_STACK', '1') != '':
     if os.environ.get('E2E_ENABLE_EAGER_REQUEUE', '') != '':
         advisor_set_values += ['controller.enableEagerRequeue=true']
 
+    # A separate opt-in run exercises restart in allocation; its jobs must
+    # carry out the order, which needs PRRTE on the compute nodes.
+    if os.environ.get('E2E_RESTART_IN_ALLOCATION', '') != '':
+        advisor_set_values += ['controller.restartInAllocation.enabled=true']
+
     advisor_values = [TILT_DIR + '/services/slurm-advisor-controller/values.yaml']
     if kubernetes_service_auth_smoke:
         advisor_values += [TILT_DIR + '/services/slurm-advisor-controller/kubernetes-service-auth.yaml']

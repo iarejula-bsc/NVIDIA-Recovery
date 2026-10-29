@@ -179,6 +179,14 @@ controller's environment default and the systemd example. Failed-job
 observations are published, and requeue waits for applicable restart Advice.
 Set it to `true` only to restore compatibility eager recovery.
 
+`controller.restartInAllocation.enabled` maps to
+`SLURM_ADVISOR_RESTART_IN_ALLOCATION_ENABLED` and defaults to `false`, which
+keeps requeueing every restarted job. When enabled, restart Advice for a running
+job that declares `in_place_recovery: prrte` orders the job to restart inside its
+allocation instead; the job carries out the order itself. See the Slurm operator
+guide for the job side of the contract. `controller.restartInAllocation.timeout`
+bounds the wait for the job to carry it out before the job is requeued instead.
+
 Eager recovery can create a successor before Job Manager issues a retry-limit
 or checkpoint-progress stop. The flag does not bypass action mode,
 acknowledgement, or other scheduler safety checks, and backend delays never

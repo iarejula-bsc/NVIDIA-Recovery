@@ -165,6 +165,28 @@ Manager issues a retry-limit or checkpoint-progress stop. Existing scheduler
 action gates still apply. The standalone process and the Helm chart's
 `controller.enableEagerRequeue` both default to `false` for Advice-only recovery.
 
+Restart in allocation is off unless `SLURM_ADVISOR_RESTART_IN_ALLOCATION_ENABLED`
+is `true`. With it, restart Advice for a running job that declares
+`in_place_recovery: prrte` orders the job to restart inside its allocation
+instead of requeueing it. The job carries out the order as its owner, so the
+controller needs no privilege beyond the Slurm operator rights it already uses:
+
+- The controller writes the order into the job's `AdminComment` as the token
+  `nvr-restart-in-allocation:<generation>:<attempt>:<issued unix seconds>:<nodes>`,
+  keeping any other content of the field, then sends `SIGUSR2` to the batch
+  script (`scancel --batch --signal=USR2`). `<nodes>` lists, comma-separated, the
+  blamed nodes the job still holds.
+- The batch script traps the signal, reads the order back with
+  `scontrol show job`, quarantines the listed nodes, replaces them and any node
+  already lost, and relaunches its application. Each separate allocation it
+  grows by must be marked with the comment `prrte-grow-of=<job ID>.<restart count>`.
+- The Advice converges once a marked allocation for the attempt is observed. An
+  order not carried out within `SLURM_ADVISOR_RESTART_IN_ALLOCATION_TIMEOUT`
+  (default `2m`) falls back to the usual requeue, as does a later failure of an
+  attempt that was already restarted in place.
+- The controller cancels marked allocations once the attempt they served stops
+  running, for example after such a requeue.
+
 Replace `HEIMDALL_ENDPOINT` (recorded during backend installation),
 `SLURM_ADVISOR_ENVIRONMENT`, and the partition allowlist with your site values.
 Also confirm `SLURM_ADVISOR_VERSIONED_SQUEUE_JSON`: set it to `true` only when

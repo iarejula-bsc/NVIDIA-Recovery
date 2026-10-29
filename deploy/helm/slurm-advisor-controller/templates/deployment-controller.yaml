@@ -103,6 +103,10 @@ spec:
               value: {{ .Values.controller.versionedSqueueJSON | quote }}
             - name: SLURM_ADVISOR_UPDATE_ELIGIBLE_TIME_AFTER_REQUEUE
               value: {{ .Values.controller.updateEligibleTimeAfterRequeue | quote }}
+            - name: SLURM_ADVISOR_RESTART_IN_ALLOCATION_ENABLED
+              value: {{ .Values.controller.restartInAllocation.enabled | quote }}
+            - name: SLURM_ADVISOR_RESTART_IN_ALLOCATION_TIMEOUT
+              value: {{ .Values.controller.restartInAllocation.timeout | quote }}
             - name: SLURM_ADVISOR_ACKNOWLEDGE_SCHEDULER_ACTIONS
               value: {{ .Values.controller.acknowledgeSchedulerActions | quote }}
             - name: SLURM_ADVISOR_AUDIT_TRAIL_DESTINATION

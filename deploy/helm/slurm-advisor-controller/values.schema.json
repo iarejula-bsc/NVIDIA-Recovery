@@ -304,6 +304,7 @@
         "partitionAllowlist",
         "versionedSqueueJSON",
         "updateEligibleTimeAfterRequeue",
+        "restartInAllocation",
         "auditTrail",
         "milestoneReporting",
         "kubernetesAuth",
@@ -365,6 +366,15 @@
         "partitionAllowlist": { "$ref": "#/definitions/partitionAllowlist" },
         "versionedSqueueJSON": { "type": "boolean" },
         "updateEligibleTimeAfterRequeue": { "type": "boolean" },
+        "restartInAllocation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "timeout"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "timeout": { "$ref": "#/definitions/duration" }
+          }
+        },
         "milestoneReporting": { "$ref": "#/definitions/milestoneReporting" },
         "auditTrail": { "$ref": "#/definitions/auditTrail" },
         "kubernetesAuth": {
