@@ -107,6 +107,13 @@ func recoveryConfigFromComment(comment string) *cluster.RecoveryConfig {
 	if value, ok := boolValue(spec, "log_file_paths_shared_across_attempts"); ok {
 		config.LogFilePathsSharedAcrossAttempts = &value
 	}
+	if mechanism, ok := stringValue(spec, "in_place_recovery"); ok {
+		// An unknown mechanism is ignored like an unknown auto_resume_mode:
+		// the job keeps recovery by requeue rather than an order no one serves.
+		if candidate := cluster.InPlaceRecovery(strings.ToLower(mechanism)); candidate == cluster.InPlaceRecoveryPRRTE {
+			config.InPlaceRecovery = candidate
+		}
+	}
 	if values, ok := spec["anomaly_detection_config"].(map[string]any); ok {
 		anomalyConfig := &cluster.AnomalyDetectionConfig{}
 		if value, present := boolValue(values, "log_based_crash_enabled"); present {
@@ -136,7 +143,8 @@ func recoveryConfigFromComment(comment string) *cluster.RecoveryConfig {
 		config.AnomalyDetection == nil &&
 		len(config.DAGDependencies) == 0 &&
 		config.DAGAction == cluster.DAGActionUnset &&
-		config.Environment == nil {
+		config.Environment == nil &&
+		config.InPlaceRecovery == cluster.InPlaceRecoveryUnset {
 		return nil
 	}
 	return config

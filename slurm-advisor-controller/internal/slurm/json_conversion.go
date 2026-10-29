@@ -94,6 +94,7 @@ type SlurmJob struct {
 	Cluster        string          `json:"cluster"`
 	Command        string          `json:"command"`
 	Comment        string          `json:"comment"`
+	AdminComment   string          `json:"admin_comment"`
 	Dependency     string          `json:"dependency"`
 	EndTime        timestampField  `json:"end_time"`
 	ExcludedNodes  string          `json:"excluded_nodes"`
@@ -241,6 +242,8 @@ func observedJobFromSqueue(jobData SlurmJob) (cluster.JobExecutionRecord, bool, 
 		Reservation:        jobData.ResvName,
 		User:               jobData.UserName,
 		Comment:            jobData.Comment,
+		GrowOf:             growJobParent(jobData.Comment),
+		RestartOrder:       restartOrderFromAdminComment(jobData.AdminComment),
 		Command:            jobData.Command,
 		Dependency:         jobData.Dependency,
 		TotalTaskCount:     jobData.Tasks.Number,

@@ -100,6 +100,9 @@ func mapRecoveryConfig(config *cluster.RecoveryConfig) *pb.JobRecoveryConfig {
 		}
 	}
 	out.DagDependencies, out.DagAction = mapDAGPolicy(config)
+	if config.InPlaceRecovery == cluster.InPlaceRecoveryPRRTE {
+		out.InPlaceRecovery = pb.JobRecoveryConfig_IN_PLACE_RECOVERY_PRRTE
+	}
 	switch config.AutoResumeMode {
 	case cluster.AutoResumeModeRequeue:
 		out.AutoResumeMode = pb.JobRecoveryConfig_AUTO_RESUME_MODE_REQUEUE

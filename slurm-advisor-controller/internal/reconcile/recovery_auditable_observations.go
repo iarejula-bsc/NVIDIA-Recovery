@@ -39,6 +39,9 @@ const (
 	SchedulerActionRelease SchedulerActionName = "slurm.release"
 	// SchedulerActionCancel cancels a job.
 	SchedulerActionCancel SchedulerActionName = "slurm.cancel"
+	// SchedulerActionRestartInAllocation restarts a running job inside its
+	// allocation instead of requeueing it.
+	SchedulerActionRestartInAllocation SchedulerActionName = "slurm.restart_in_allocation"
 )
 
 // SchedulerActionOutcome describes the result of an auditable scheduler command.

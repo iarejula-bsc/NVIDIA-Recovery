@@ -114,6 +114,13 @@ type Config struct {
 	AdviceRequeueHoldDelay   time.Duration
 	// EnableEagerRequeue allows failed-job recovery before restart Advice; disabled by default.
 	EnableEagerRequeue bool
+	// RestartInAllocationEnabled orders running jobs that declare PRRTE
+	// in-place recovery to restart inside their allocation instead of
+	// requeueing them. Disabled by default: they are requeued like any job.
+	RestartInAllocationEnabled bool
+	// RestartInAllocationTimeout bounds the wait for a job to carry out a
+	// restart order before it is requeued instead; 2m by default.
+	RestartInAllocationTimeout time.Duration
 	// BootstrapFailureLookback bounds rediscovery of finished failures for eager recovery by end time.
 	BootstrapFailureLookback time.Duration
 	// AuditTrailDestination selects logging (the default) or gateway delivery.
@@ -181,6 +188,8 @@ type environmentConfig struct {
 	AdviceMaxAge                   optionalDuration   `envconfig:"SLURM_ADVISOR_ADVICE_MAX_AGE"`
 	AdviceRequeueHoldDelay         time.Duration      `envconfig:"SLURM_ADVISOR_REQUEUE_HOLD_DELAY"`
 	EnableEagerRequeue             bool               `envconfig:"SLURM_ADVISOR_ENABLE_EAGER_REQUEUE"`
+	RestartInAllocationEnabled     bool               `envconfig:"SLURM_ADVISOR_RESTART_IN_ALLOCATION_ENABLED"`
+	RestartInAllocationTimeout     time.Duration      `envconfig:"SLURM_ADVISOR_RESTART_IN_ALLOCATION_TIMEOUT"`
 	BootstrapFailureLookback       optionalDuration   `envconfig:"SLURM_ADVISOR_BOOTSTRAP_FAILURE_LOOKBACK"`
 	Environment                    string             `envconfig:"SLURM_ADVISOR_ENVIRONMENT"`
 	MetricsEnabled                 optionalBool       `envconfig:"SLURM_ADVISOR_METRICS_ENABLED"`
@@ -262,6 +271,8 @@ func FromEnv() (Config, error) {
 		AdviceMaxAge:                   settings.AdviceMaxAge.value,
 		AdviceRequeueHoldDelay:         settings.AdviceRequeueHoldDelay,
 		EnableEagerRequeue:             settings.EnableEagerRequeue,
+		RestartInAllocationEnabled:     settings.RestartInAllocationEnabled,
+		RestartInAllocationTimeout:     settings.RestartInAllocationTimeout,
 		BootstrapFailureLookback:       settings.BootstrapFailureLookback.value,
 		AuditTrailDestination:          settings.AuditTrailDestination,
 		AuditTrailMaxBatchSize:         settings.AuditTrailMaxBatchSize.value,
@@ -564,6 +575,9 @@ func WithDefaults(cfg Config) Config {
 	if cfg.SlurmExecTimeout == 0 {
 		cfg.SlurmExecTimeout = 5 * time.Second
 	}
+	if cfg.RestartInAllocationTimeout == 0 {
+		cfg.RestartInAllocationTimeout = 2 * time.Minute
+	}
 	if cfg.LogMetadataRefreshInterval == 0 && !cfg.logMetadataRefreshIntervalEnvSet {
 		cfg.LogMetadataRefreshInterval = 5 * time.Minute
 	}
@@ -728,6 +742,9 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.AdviceItemTimeout <= 0 {
 		return errors.Newf("advice item timeout must be positive: %s", cfg.AdviceItemTimeout)
+	}
+	if cfg.RestartInAllocationTimeout <= 0 {
+		return errors.Newf("restart in allocation timeout must be positive: %s", cfg.RestartInAllocationTimeout)
 	}
 	if cfg.AdviceMaxAge <= 0 {
 		return errors.Newf("advice max age must be positive: %s", cfg.AdviceMaxAge)

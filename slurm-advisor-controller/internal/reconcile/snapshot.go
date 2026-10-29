@@ -23,6 +23,10 @@ type ControllerSnapshot struct {
 	// ActiveJobs are JobExecutionRecord metadata sourced from squeue.
 	ActiveJobs map[cluster.JobAttemptRef]cluster.JobExecutionRecord
 
+	// GrowJobs are active grow jobs, kept apart from ActiveJobs because they
+	// are not managed on their own; see cluster.JobExecutionRecord.GrowOf.
+	GrowJobs []cluster.JobExecutionRecord
+
 	// AccountingJobs are JobExecutionRecord metadata sourced from sacct
 	AccountingJobs map[cluster.JobAttemptRef]cluster.JobExecutionRecord
 

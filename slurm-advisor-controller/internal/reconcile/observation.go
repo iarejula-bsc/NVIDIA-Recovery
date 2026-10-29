@@ -70,10 +70,11 @@ const (
 type SchedulerAction string
 
 const (
-	ActionAdviceRequeueHold SchedulerAction = "advice_requeuehold"
-	ActionAdviceRelease     SchedulerAction = "advice_release"
-	ActionAdviceKill        SchedulerAction = "advice_kill"
-	ActionAdviceNodeUpdate  SchedulerAction = "advice_node_update"
+	ActionAdviceRequeueHold         SchedulerAction = "advice_requeuehold"
+	ActionAdviceRelease             SchedulerAction = "advice_release"
+	ActionAdviceKill                SchedulerAction = "advice_kill"
+	ActionAdviceNodeUpdate          SchedulerAction = "advice_node_update"
+	ActionAdviceRestartInAllocation SchedulerAction = "advice_restart_in_allocation"
 )
 
 // Observer receives one SyncObservation after each reconciliation loop.

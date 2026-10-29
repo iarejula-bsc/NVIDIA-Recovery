@@ -304,6 +304,7 @@ func TestBuildCreateOrUpdateJobRequestMapsRecoveryConfig(t *testing.T) {
 			MaxRequeueTimes:                  &maxRequeues,
 			RequeueOnCompletion:              &requeueOnCompletion,
 			LogFilePathsSharedAcrossAttempts: &sharedLogPaths,
+			InPlaceRecovery:                  cluster.InPlaceRecoveryPRRTE,
 			AnomalyDetection: &cluster.AnomalyDetectionConfig{
 				LogBasedCrashEnabled:                &logBasedCrashEnabled,
 				LogBasedTimeoutEnabled:              &logBasedTimeoutEnabled,
@@ -333,6 +334,9 @@ func TestBuildCreateOrUpdateJobRequestMapsRecoveryConfig(t *testing.T) {
 			"LogFilePathsSharedAcrossAttempts = %v, want true",
 			config.LogFilePathsSharedAcrossAttempts,
 		)
+	}
+	if config.GetInPlaceRecovery() != pb.JobRecoveryConfig_IN_PLACE_RECOVERY_PRRTE {
+		t.Fatalf("InPlaceRecovery = %s, want PRRTE", config.GetInPlaceRecovery())
 	}
 	detection := config.GetAnomalyDetectionConfig()
 	if detection == nil || detection.LogBasedCrashEnabled == nil || detection.GetLogBasedCrashEnabled() {

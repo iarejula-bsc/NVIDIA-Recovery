@@ -35,6 +35,13 @@ type ControllerOptions struct {
 	// EnableEagerRequeue permits recovery before Advice. Disabled by default so
 	// Job Manager can apply retry and checkpoint policies before requeue.
 	EnableEagerRequeue bool
+	// RestartInAllocation orders running jobs that declare PRRTE in-place
+	// recovery to restart inside their allocation instead of requeueing them;
+	// disabled by default.
+	RestartInAllocation bool
+	// RestartInAllocationTimeout bounds the wait for a job to carry out a
+	// restart order before it is requeued instead.
+	RestartInAllocationTimeout time.Duration
 	// BootstrapFailureLookback bounds finished failure discovery when eager
 	// requeue is enabled. Production configuration supplies a positive duration.
 	BootstrapFailureLookback time.Duration
@@ -406,6 +413,10 @@ func (c *Controller) buildBaseSnapshot(ctx context.Context, observation *SyncObs
 	}
 	admittedActiveJobs := make([]cluster.JobExecutionRecord, 0, len(activeJobs))
 	for _, job := range activeJobs {
+		if job.GrowOf != nil {
+			snapshot.GrowJobs = append(snapshot.GrowJobs, job)
+			continue
+		}
 		key := jobAttemptRef(job)
 		if snapshot.EnvironmentAdmissions[key].Admitted && !environmentAdmissionBlocks(snapshot, key) {
 			admittedActiveJobs = append(admittedActiveJobs, job)

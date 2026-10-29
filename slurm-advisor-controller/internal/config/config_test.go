@@ -1435,3 +1435,62 @@ func TestFromEnvGatewayTLS(t *testing.T) {
 		t.Fatal("accepted TLS trust settings with plaintext transport")
 	}
 }
+
+// Restart in allocation stays off unless explicitly enabled, and the wait for
+// a job to carry out an order must be bounded, or a lost order would never
+// fall back to a requeue.
+func TestFromEnvRestartInAllocation(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		values      map[string]string
+		wantEnabled bool
+		wantTimeout time.Duration
+		wantErr     bool
+	}{
+		{name: "absent leaves it off", wantTimeout: 2 * time.Minute},
+		{
+			name:        "enabled with the default wait",
+			values:      map[string]string{"SLURM_ADVISOR_RESTART_IN_ALLOCATION_ENABLED": "true"},
+			wantEnabled: true, wantTimeout: 2 * time.Minute,
+		},
+		{
+			name: "explicit wait",
+			values: map[string]string{
+				"SLURM_ADVISOR_RESTART_IN_ALLOCATION_ENABLED": "true",
+				"SLURM_ADVISOR_RESTART_IN_ALLOCATION_TIMEOUT": "45s",
+			},
+			wantEnabled: true, wantTimeout: 45 * time.Second,
+		},
+		{
+			name:    "negative wait",
+			values:  map[string]string{"SLURM_ADVISOR_RESTART_IN_ALLOCATION_TIMEOUT": "-1s"},
+			wantErr: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			values := map[string]string{"HEIMDALL_ENDPOINT": "127.0.0.1:8080"}
+			for key, value := range tt.values {
+				values[key] = value
+			}
+			setConfigEnv(t, values)
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatalf("FromEnv(): %v", err)
+			}
+			err = cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("Validate() succeeded with an unbounded restart wait")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Validate(): %v", err)
+			}
+			if cfg.RestartInAllocationEnabled != tt.wantEnabled || cfg.RestartInAllocationTimeout != tt.wantTimeout {
+				t.Fatalf("restart in allocation enabled = %t timeout = %s, want %t %s",
+					cfg.RestartInAllocationEnabled, cfg.RestartInAllocationTimeout, tt.wantEnabled, tt.wantTimeout)
+			}
+		})
+	}
+}

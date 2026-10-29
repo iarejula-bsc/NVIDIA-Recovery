@@ -142,6 +142,8 @@ func schedulerActionToProto(action SchedulerActionName) pb.RecoverySchedulerActi
 		return pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_RELEASE
 	case SchedulerActionCancel:
 		return pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL
+	case SchedulerActionRestartInAllocation:
+		return pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_SLURM_RESTART_IN_ALLOCATION
 	default:
 		return pb.RecoverySchedulerAction_RECOVERY_SCHEDULER_ACTION_UNSPECIFIED
 	}

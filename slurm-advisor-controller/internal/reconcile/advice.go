@@ -129,7 +129,7 @@ func (c *Controller) reconcileAdviceItem(ctx context.Context, snapshot Controlle
 			return skippedAdviceResult(advice, AdviceSkipIgnoredJob)
 		}
 		workCtx, cancelItem = timeoutContext(ctx, c.Options.AdviceItemTimeout)
-		return c.applyAdviceForJob(workCtx, advice, job, mode, observation, &application)
+		return c.applyAdviceForJob(workCtx, advice, job, attemptGrown(snapshot, job), mode, observation, &application)
 	}()
 	for _, skip := range result.Skips {
 		observeAdviceSkip(observation, skip.Reason)
@@ -140,7 +140,10 @@ func (c *Controller) reconcileAdviceItem(ctx context.Context, snapshot Controlle
 	return result, c.publishAdviceTerminalOutcomes(workCtx, snapshot.ObservedAt, result.TerminalOutcomes, observation)
 }
 
-func (c *Controller) applyAdviceForJob(ctx context.Context, advice *pb.Advice, job cluster.JobExecutionRecord, mode cluster.JobMode, observation *SyncObservation, auditObservation *AdviceApplicationObservation) (result AdviceSyncResult, err error) {
+// applyAdviceForJob applies one Advice to the job's latest observed attempt.
+// grown reports whether that attempt already holds a grow job, that is, it was
+// already restarted inside its allocation.
+func (c *Controller) applyAdviceForJob(ctx context.Context, advice *pb.Advice, job cluster.JobExecutionRecord, grown bool, mode cluster.JobMode, observation *SyncObservation, auditObservation *AdviceApplicationObservation) (result AdviceSyncResult, err error) {
 	auditObservation.recoverySpan.SetMode(mode)
 
 	desiredState := advice.GetAdvice().GetState()
@@ -179,6 +182,24 @@ func (c *Controller) applyAdviceForJob(ctx context.Context, advice *pb.Advice, j
 			return terminalAdviceResult(advice, AdviceSkipStaleAttempt,
 				pb.AdviceReconciliationDisposition_ADVICE_RECONCILIATION_DISPOSITION_ABANDONED,
 				pb.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_STALE_ATTEMPT)
+		}
+
+		if attemptDelta == 0 && c.restartsInAllocation(job) {
+			step, err := c.restartAdviceJobInAllocation(ctx, advice, job, grown, exclusions, mode, observation, auditObservation)
+			if err != nil {
+				return result, err
+			}
+			switch step {
+			case inPlaceRestartObserved:
+				// The job keeps its attempt, so the successor attempt that
+				// normally proves a restart never appears; the reason tells
+				// the backend that the attempt was restarted without one.
+				return terminalAdviceResult(advice, AdviceSkipAlreadySatisfied,
+					pb.AdviceReconciliationDisposition_ADVICE_RECONCILIATION_DISPOSITION_CONVERGED,
+					pb.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_RESTARTED_IN_PLACE)
+			case inPlaceRestartPending:
+				return result, nil
+			}
 		}
 
 		requeueCompleted := attemptDelta == 0 && job.State == cluster.JobStateRequeued
@@ -366,6 +387,133 @@ func (c *Controller) applyAdviceForJob(ctx context.Context, advice *pb.Advice, j
 	default:
 		return skippedAdviceResult(advice, AdviceSkipUnsupportedRecommendation)
 	}
+}
+
+// restartsInAllocation reports whether a restart of the job is ordered inside
+// its allocation. Only a running job still holds the allocation, and only a job
+// that declared PRRTE in-place recovery can carry out the order.
+func (c *Controller) restartsInAllocation(job cluster.JobExecutionRecord) bool {
+	return c.Options.RestartInAllocation &&
+		job.State == cluster.JobStateRunning &&
+		job.RecoveryConfig != nil &&
+		job.RecoveryConfig.InPlaceRecovery == cluster.InPlaceRecoveryPRRTE
+}
+
+// inPlaceRestartStep is where a restart inside the allocation stands.
+type inPlaceRestartStep int
+
+const (
+	// inPlaceRestartPending: the job has been ordered and is carrying it out.
+	inPlaceRestartPending inPlaceRestartStep = iota
+	// inPlaceRestartObserved: scheduler state shows the restart done.
+	inPlaceRestartObserved
+	// inPlaceRestartUnavailable: the job must be requeued instead.
+	inPlaceRestartUnavailable
+)
+
+// restartAdviceJobInAllocation advances a restart inside the allocation from
+// fresh scheduler state alone, so a controller restart resumes it where it
+// stands. The job carries out the order as its owner; the controller only
+// gives the order and observes the outcome:
+//
+//   - With no order for this Advice generation and attempt, it orders the
+//     restart, quarantining the blamed nodes the job still holds.
+//   - The order is done once the attempt holds a grow job, the replacement
+//     nodes the job obtained.
+//   - An order not done within the restart timeout, for example because the
+//     job lost the wake-up signal or no node was granted, falls back to a
+//     requeue, which also tears down whatever the job had done.
+//   - An attempt that already grew without an order for this generation was
+//     restarted in place by an earlier generation and failed again. Recovery is
+//     modeled per attempt, so it gets at most one restart in place and is
+//     requeued into a fresh attempt.
+//
+// Command acceptance is never taken as convergence, matching how a requeue is
+// only concluded from the successor attempt. In observe mode the order is only
+// planned.
+func (c *Controller) restartAdviceJobInAllocation(
+	ctx context.Context,
+	advice *pb.Advice,
+	job cluster.JobExecutionRecord,
+	grown bool,
+	exclusions []string,
+	mode cluster.JobMode,
+	observation *SyncObservation,
+	auditObservation *AdviceApplicationObservation,
+) (inPlaceRestartStep, error) {
+	generation := max(advice.GetGeneration(), 1)
+	order := job.RestartOrder
+	ordered := order != nil && order.Generation == generation && order.AttemptIndex == job.AttemptIndex
+	switch {
+	case ordered && grown:
+		return inPlaceRestartObserved, nil
+	case ordered && c.Options.RestartInAllocationTimeout > 0 &&
+		!c.observedAt().Before(order.IssuedAt.Add(c.Options.RestartInAllocationTimeout)):
+		c.logInPlaceRestartFallback(advice, job, "the job did not restart within the restart timeout")
+		return inPlaceRestartUnavailable, nil
+	case ordered:
+		return inPlaceRestartPending, nil
+	case grown:
+		c.logInPlaceRestartFallback(advice, job, "the attempt was already restarted in place once")
+		return inPlaceRestartUnavailable, nil
+	}
+
+	// A node the job no longer holds needs no quarantine.
+	var quarantine []string
+	for _, node := range exclusions {
+		if slices.Contains(job.AllocatedNodes, node) {
+			quarantine = append(quarantine, node)
+		}
+	}
+	next := cluster.InPlaceRestartOrder{
+		Generation:   generation,
+		AttemptIndex: job.AttemptIndex,
+		IssuedAt:     c.observedAt().UTC(),
+		Quarantine:   quarantine,
+	}
+	if mode != cluster.JobModeAct {
+		observeAdviceAction(observation, ActionAdviceRestartInAllocation, mode, ObservationOutcomePlanned)
+	}
+	err := c.runAdviceSchedulerAction(
+		ctx, auditObservation, SchedulerActionRestartInAllocation, true, mode,
+		func(actionCtx context.Context) error {
+			return c.ActionExecutor.JobOrderRestartInAllocation(actionCtx, job.JobID, next)
+		},
+	)
+	if mode != cluster.JobModeAct {
+		return inPlaceRestartPending, nil
+	}
+	if err != nil {
+		// Retried from fresh state on the next pass, like other scheduler
+		// command failures.
+		observeAdviceAction(observation, ActionAdviceRestartInAllocation, mode, ObservationOutcomeError)
+		return inPlaceRestartPending, errors.Wrapf(err, "run advice action %s for job %s: order restart in allocation", advice.GetHeimdallJobId(), advice.GetJobId())
+	}
+	observeAdviceAction(observation, ActionAdviceRestartInAllocation, mode, ObservationOutcomeSuccess)
+	return inPlaceRestartPending, nil
+}
+
+func (c *Controller) logInPlaceRestartFallback(advice *pb.Advice, job cluster.JobExecutionRecord, why string) {
+	if c.Logger == nil {
+		return
+	}
+	c.Logger.Warn(
+		"requeueing instead of restarting in place: "+why,
+		zap.String("advice_id", advice.GetHeimdallJobId()),
+		zap.String("job_id", job.JobID),
+		zap.Int32("attempt_index", job.AttemptIndex),
+	)
+}
+
+// attemptGrown reports whether the job's attempt holds a grow job, the trace a
+// restart inside its allocation leaves in scheduler state.
+func attemptGrown(snapshot ControllerSnapshot, job cluster.JobExecutionRecord) bool {
+	for _, grow := range snapshot.GrowJobs {
+		if *grow.GrowOf == jobAttemptRef(job) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Controller) logAdviceRelease(advice *pb.Advice, job cluster.JobExecutionRecord) {

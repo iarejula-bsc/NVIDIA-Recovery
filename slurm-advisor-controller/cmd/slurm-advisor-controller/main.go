@@ -333,6 +333,8 @@ func newController(
 			AdviceMaxAge:                   cfg.AdviceMaxAge,
 			AdviceRequeueHoldDelay:         cfg.AdviceRequeueHoldDelay,
 			EnableEagerRequeue:             cfg.EnableEagerRequeue,
+			RestartInAllocation:            cfg.RestartInAllocationEnabled,
+			RestartInAllocationTimeout:     cfg.RestartInAllocationTimeout,
 			BootstrapFailureLookback:       cfg.BootstrapFailureLookback,
 			Environment:                    cfg.Environment,
 			UserAllowlist:                  cfg.UserAllowlist,

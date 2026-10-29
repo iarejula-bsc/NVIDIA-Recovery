@@ -29,6 +29,15 @@ type JobMutator interface {
 	JobNodeUpdate(ctx context.Context, jobID string, exclusions, inclusions []string, nodeCount int) error
 	JobRequeueHold(ctx context.Context, jobID string) error
 	JobUpdateEligibleNow(ctx context.Context, jobID string) error
+	// JobOrderRestartInAllocation orders a running job to restart inside the
+	// allocation it holds, instead of being requeued. The job carries out the
+	// order itself, as its owner: it isolates the quarantined nodes so the
+	// scheduler cannot grant them again, replaces them and any node it already
+	// lost with new ones, and relaunches its application. The order is recorded
+	// in scheduler state, where later observations read it back as the job's
+	// RestartOrder, and the job is woken to act on it. Ordering again replaces
+	// the previous order.
+	JobOrderRestartInAllocation(ctx context.Context, jobID string, order InPlaceRestartOrder) error
 }
 
 type Cluster interface {

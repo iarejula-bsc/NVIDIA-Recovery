@@ -175,6 +175,20 @@ func (mr *MockJobMutatorMockRecorder) JobNodeUpdate(ctx, jobID, exclusions, incl
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JobNodeUpdate", reflect.TypeOf((*MockJobMutator)(nil).JobNodeUpdate), ctx, jobID, exclusions, inclusions, nodeCount)
 }
 
+// JobOrderRestartInAllocation mocks base method.
+func (m *MockJobMutator) JobOrderRestartInAllocation(ctx context.Context, jobID string, order cluster.InPlaceRestartOrder) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "JobOrderRestartInAllocation", ctx, jobID, order)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// JobOrderRestartInAllocation indicates an expected call of JobOrderRestartInAllocation.
+func (mr *MockJobMutatorMockRecorder) JobOrderRestartInAllocation(ctx, jobID, order any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JobOrderRestartInAllocation", reflect.TypeOf((*MockJobMutator)(nil).JobOrderRestartInAllocation), ctx, jobID, order)
+}
+
 // JobRelease mocks base method.
 func (m *MockJobMutator) JobRelease(ctx context.Context, jobID string) error {
 	m.ctrl.T.Helper()
@@ -339,6 +353,20 @@ func (m *MockCluster) JobNodeUpdate(ctx context.Context, jobID string, exclusion
 func (mr *MockClusterMockRecorder) JobNodeUpdate(ctx, jobID, exclusions, inclusions, nodeCount any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JobNodeUpdate", reflect.TypeOf((*MockCluster)(nil).JobNodeUpdate), ctx, jobID, exclusions, inclusions, nodeCount)
+}
+
+// JobOrderRestartInAllocation mocks base method.
+func (m *MockCluster) JobOrderRestartInAllocation(ctx context.Context, jobID string, order cluster.InPlaceRestartOrder) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "JobOrderRestartInAllocation", ctx, jobID, order)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// JobOrderRestartInAllocation indicates an expected call of JobOrderRestartInAllocation.
+func (mr *MockClusterMockRecorder) JobOrderRestartInAllocation(ctx, jobID, order any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JobOrderRestartInAllocation", reflect.TypeOf((*MockCluster)(nil).JobOrderRestartInAllocation), ctx, jobID, order)
 }
 
 // JobRelease mocks base method.

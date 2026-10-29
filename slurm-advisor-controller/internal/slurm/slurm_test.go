@@ -589,6 +589,27 @@ func TestRecoveryConfigPreservesSharedLogPathPolicy(t *testing.T) {
 	}
 }
 
+func TestRecoveryConfigReadsPRRTEInPlaceRecovery(t *testing.T) {
+	for _, comment := range []string{
+		`{"APS":{"in_place_recovery":"prrte"}}`,
+		`{"APS":{"in_place_recovery":"PRRTE"}}`,
+	} {
+		config := recoveryConfigFromComment(comment)
+		if config == nil || config.InPlaceRecovery != cluster.InPlaceRecoveryPRRTE {
+			t.Errorf("recoveryConfigFromComment(%s) = %#v, want PRRTE in-place recovery", comment, config)
+		}
+	}
+}
+
+// A mechanism nothing serves must leave the job on recovery by requeue, never
+// waiting for an order that will not come.
+func TestRecoveryConfigIgnoresUnknownInPlaceRecoveryMechanism(t *testing.T) {
+	config := recoveryConfigFromComment(`{"APS":{"in_place_recovery":"prte","auto_resume_mode":"requeue"}}`)
+	if config == nil || config.InPlaceRecovery != cluster.InPlaceRecoveryUnset {
+		t.Fatalf("RecoveryConfig = %#v, want no in-place recovery", config)
+	}
+}
+
 func TestRecoveryConfigPreservesDAGPolicy(t *testing.T) {
 	config := recoveryConfigFromComment(`{"APS":{"dag_dependencies":[{"target":{"type":"id","id":"123"}},{"target":{"type":"name","name":"prepare"},"trigger":"completed"}],"dag_action":"release"}}`)
 	if config == nil {
