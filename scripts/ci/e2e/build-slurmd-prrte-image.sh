@@ -15,9 +15,10 @@ fi
 cluster="$1"
 image="$2"
 slurmd_image="$3"
-context="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/images/slurmd-prrte"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
-docker build --build-arg "SLURMD_IMAGE=$slurmd_image" --tag "$image" "$context"
+docker build --build-arg "SLURMD_IMAGE=$slurmd_image" --tag "$image" \
+  --file "$root/scripts/ci/e2e/images/slurmd-prrte/Dockerfile" "$root"
 
 nodes="$(kubectl get nodes \
   --selector 'heimdall.nvidia.com/slurm-node in (prrte-a-0,prrte-b-0,prrte-c-0)' \
