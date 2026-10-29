@@ -61,6 +61,9 @@ onward. Earlier decisions are not included.
 | [0051](0051-retire-embedded-anomaly-attributions.md) | accepted | Retire embedded anomaly attribution queries, public fields, configuration, and dashboard attribution-count badges. |
 | [0052](0052-run-e2e-tests-as-isolated-staged-scenarios.md) | accepted | Run each E2E test as a staged scenario that launches its own jobs through a scheduler-neutral launcher and verifies evidence over HTTP, isolated from other tests; narrows ADR 0005's service-proxy transport allowance. |
 | [0053](0053-fanout-audit-and-recovery-trace.md) | superseded | Fan out overlapping recovery activity to trace spans and audit events without making recovery-sequence data the audit source of truth; superseded by ADR 0048. |
+| [0054](0054-restart-prrte-jobs-inside-their-slurm-allocation.md) | proposed | Apply restart Advice for opted-in PRRTE jobs inside their allocation: SAC orders through `AdminComment` and a signal, the job carries it out, SAC converges on the observed grow job and falls back to requeue. |
+| [0055](0055-count-a-restart-in-place-as-a-restart-of-its-attempt.md) | proposed | Restart an attempt in place at most once, record it on the attempt, count it towards the restart limit, and attribute the attempt again only when it ends. |
+| [0056](0056-provide-the-job-side-of-restart-in-allocation-as-a-wrapper.md) | proposed | Provide the job side as the `nvr-prrte-run` wrapper over the PMIx and PRRTE tools, and test it end to end with patched PRRTE until the fixes are upstream. |
 
 ADR numbers 0018, 0019, 0023, and 0024 are retired; their external-service
 decisions were removed with maintainer approval. Do not reuse these numbers.
