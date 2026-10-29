@@ -92,6 +92,18 @@ if os.environ.get('DEPLOY_INFRA', '1') != '':
     alloy_config = render_dir + '/alloy-config.river'
     alloy_application_config = render_dir + '/alloy-application-config.river'
     slurm_values = render_dir + '/slurm.yaml'
+    # The restart-in-allocation run adds PRRTE nodes built from a local image,
+    # tagged by the content of its build context.
+    restart_in_allocation = os.environ.get('E2E_RESTART_IN_ALLOCATION', '') != ''
+    prrte_image_dir = E2E_DIR + '/images/slurmd-prrte'
+    prrte_image_repository = 'heimdall-e2e/slurmd-prrte'
+    prrte_image_tag = 'disabled'
+    if restart_in_allocation:
+        prrte_image_tag = str(local(
+            ['sh', '-c', 'tar -C "$1" -cf - --sort=name --mtime=@0 --owner=0 --group=0 . | sha256sum | cut -c1-16',
+             'sh', prrte_image_dir],
+            quiet=True,
+        )).strip()
     slurm_shared_storage = render_dir + '/slurm-shared-storage.yaml'
 
     cert_manager_timeout = os.environ.get('CERT_MANAGER_WAIT_TIMEOUT', '') or service_wait_timeout or '600'
@@ -361,10 +373,30 @@ if os.environ.get('DEPLOY_INFRA', '1') != '':
             slurm_shared_home,
             '__SLINKY_SLURM_TAG__',
             slinky_slurm_tag,
+            '__E2E_PRRTE_ENABLED__',
+            'true' if restart_in_allocation else 'false',
+            '__E2E_PRRTE_IMAGE_REPOSITORY__',
+            prrte_image_repository,
+            '__E2E_PRRTE_IMAGE_TAG__',
+            prrte_image_tag,
         ],
         deps=[E2E_DIR + '/services/values/slurm.yaml', TILT_DIR + '/render.sh'],
         labels=[INFRA_LABEL],
     )
+    slurm_deps = ['slurm-operator', 'slurm-priorityclass', 'slurm-shared-storage', 'slurm-values']
+    if restart_in_allocation:
+        local_resource(
+            'slurmd-prrte-image',
+            cmd=[
+                E2E_DIR + '/build-slurmd-prrte-image.sh',
+                cluster_name,
+                prrte_image_repository + ':' + prrte_image_tag,
+                'ghcr.io/slinkyproject/slurmd:' + slinky_slurm_tag,
+            ],
+            deps=[prrte_image_dir, E2E_DIR + '/build-slurmd-prrte-image.sh'],
+            labels=[INFRA_LABEL],
+        )
+        slurm_deps.append('slurmd-prrte-image')
 
     helm_resource(
         'slurm',
@@ -382,7 +414,7 @@ if os.environ.get('DEPLOY_INFRA', '1') != '':
             slurm_timeout + 's',
         ],
         deps=[E2E_DIR + '/services/values/slurm.yaml'],
-        resource_deps=['slurm-operator', 'slurm-priorityclass', 'slurm-shared-storage', 'slurm-values'],
+        resource_deps=slurm_deps,
         labels=[INFRA_LABEL],
         port_forwards=['2222:22', '6820:6820'],
     )
@@ -577,8 +609,7 @@ if os.environ.get('DEPLOY_STACK', '1') != '':
     if os.environ.get('E2E_ENABLE_EAGER_REQUEUE', '') != '':
         advisor_set_values += ['controller.enableEagerRequeue=true']
 
-    # A separate opt-in run exercises restart in allocation; its jobs must
-    # carry out the order, which needs PRRTE on the compute nodes.
+    # A separate opt-in run exercises restart in allocation on the PRRTE nodes.
     if os.environ.get('E2E_RESTART_IN_ALLOCATION', '') != '':
         advisor_set_values += ['controller.restartInAllocation.enabled=true']
 

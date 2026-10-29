@@ -225,19 +225,22 @@ def deployment_available(deployment: str) -> Check[E2EServices]:
     return check
 
 
-def hardware_attribution(exclusion_type: str, *, signature: str = "", attempt: int = 0) -> Check[RecoveryClient]:
-    """Attribution excluded the attempt's node as `exclusion_type`, with `signature` when given."""
+def hardware_attribution(
+    exclusion_type: str, *, signature: str = "", attempt: int = 0, node: str | None = None
+) -> Check[RecoveryClient]:
+    """Attribution excluded `node`, by default the single node of the attempt, as `exclusion_type`, with `signature`
+    when given."""
 
     def check(run: Run[RecoveryClient]) -> Evidence:
-        node = _attempt_node(run, attempt)
-        if node is None:
+        node_name = node or _attempt_node(run, attempt)
+        if node_name is None:
             return Evidence(False, f"job {run.job.job_id} attempt {attempt} has no recorded node yet")
         response = run.services.job_manager.error_attributions(job_id=run.job.job_id, attempt=attempt)
         evidence = evaluate_attribution_response(
             response.text,
             job_id=run.job.job_id,
             attempt=attempt,
-            node=node,
+            node=node_name,
             exclusion_type=exclusion_type,
             signature=signature,
         )
@@ -268,12 +271,13 @@ def recovered_away_from_initial_node() -> Check[RecoveryClient]:
     return check
 
 
-def system_log_line(marker: str, *, attempt: int = 0) -> Check[RecoveryClient]:
-    """The log backend collected `marker` from the system journal of the node the attempt ran on."""
+def system_log_line(marker: str, *, attempt: int = 0, node: str | None = None) -> Check[RecoveryClient]:
+    """The log backend collected `marker` from the system journal of `node`, by default the single node the attempt
+    ran on."""
 
     def check(run: Run[RecoveryClient]) -> Evidence:
-        node = _attempt_node(run, attempt)
-        if node is None:
+        node_name = node or _attempt_node(run, attempt)
+        if node_name is None:
             return Evidence(False, f"job {run.job.job_id} attempt {attempt} has no recorded node yet")
         logs = run.services.logs
         response = logs.query(
@@ -283,7 +287,7 @@ def system_log_line(marker: str, *, attempt: int = 0) -> Check[RecoveryClient]:
             end=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         )
         evidence = evaluate_system_log_response(
-            response.text, node_name=node, marker=marker, submitted_at=_submitted_at(run), backend=logs.backend
+            response.text, node_name=node_name, marker=marker, submitted_at=_submitted_at(run), backend=logs.backend
         )
         return Evidence(evidence.observed, evidence.summary)
 
@@ -633,8 +637,9 @@ def advice_unchanged(baseline: str, *, attempt: int = 0) -> Check[RecoveryClient
     return check
 
 
-def advice_converged(*, attempt: int = 0) -> Check[RecoveryClient]:
-    """The controller reported to Job Manager that it observed the current Advice for the attempt as satisfied.
+def advice_converged(*, attempt: int = 0, reason: str | None = None) -> Check[RecoveryClient]:
+    """The controller reported to Job Manager that it observed the current Advice for the attempt as satisfied, for
+    `reason` when given.
 
     Job Manager reports reconciliation status only for the Advice's current generation, so a changed
     recommendation reads as not converged until the controller observes it.
@@ -645,7 +650,7 @@ def advice_converged(*, attempt: int = 0) -> Check[RecoveryClient]:
         payload = response.json() if response else {}
         status = payload.get("reconciliationStatus") or {}
         return Evidence(
-            status.get("disposition") == "CONVERGED",
+            status.get("disposition") == "CONVERGED" and (reason is None or status.get("reason") == reason),
             f"job {run.job.job_id} attempt {attempt} Advice generation {payload.get('generation')} reconciliation "
             f"is {status.get('disposition')} ({status.get('reason')})",
         )

@@ -88,11 +88,22 @@ else
   fi
 fi
 
+# Non-empty runs the work-in-progress restart-in-allocation scenario: it builds
+# the PRRTE slurmd image, adds the PRRTE nodes and enables restart in
+# allocation in the controller. Empty (default) leaves all of that out.
+E2E_RESTART_IN_ALLOCATION="${E2E_RESTART_IN_ALLOCATION:-}"
+export E2E_RESTART_IN_ALLOCATION
+
 # Path to a Kind config template. The default uses two labeled workers so each
-# Slinky compute identity has its own host syslog and node-local Alloy target.
-# A custom template may use __SLURM_SHARED_HOME__ to request the same narrowly
-# scoped shared-home bind mount as the reference topology.
-KIND_CONFIG="${KIND_CONFIG:-$_ENV_DIR/values/kind-node-separated.yaml}"
+# Slinky compute identity has its own host syslog and node-local Alloy target;
+# the restart-in-allocation run adds one per PRRTE node. A custom template may
+# use __SLURM_SHARED_HOME__ to request the same narrowly scoped shared-home bind
+# mount as the reference topology.
+if [[ -n "$E2E_RESTART_IN_ALLOCATION" ]]; then
+  KIND_CONFIG="${KIND_CONFIG:-$_ENV_DIR/values/kind-node-separated-prrte.yaml}"
+else
+  KIND_CONFIG="${KIND_CONFIG:-$_ENV_DIR/values/kind-node-separated.yaml}"
+fi
 
 # Non-empty leaves the cluster running after the pipeline finishes (or fails)
 # so you can inspect it: KUBECONFIG=<path> kubectl get pods -A. Empty (default)

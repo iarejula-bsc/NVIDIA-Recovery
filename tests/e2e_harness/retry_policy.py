@@ -19,18 +19,29 @@ from e2e_harness.recovery_client import RecoveryClient
 _SAC = "slurm-advisor-controller"
 _CONFIG_KEY = "job_manager_config.yaml"
 _EAGER_ENV = "SLURM_ADVISOR_ENABLE_EAGER_REQUEUE"
+_RESTART_IN_ALLOCATION_ENV = "SLURM_ADVISOR_RESTART_IN_ALLOCATION_ENABLED"
 _RECONNECT_TIMEOUT_SECONDS = 30.0
 _RECONNECT_POLL_SECONDS = 0.5
+
+
+def _sac_flag_enabled(slurm_stack: StackControl, name: str) -> bool:
+    deployment = slurm_stack.get("deployment", _SAC)
+    controller = next(
+        container for container in deployment["spec"]["template"]["spec"]["containers"] if container["name"] == _SAC
+    )
+    return any(entry["name"] == name and entry.get("value") == "true" for entry in controller.get("env", []))
 
 
 def eager_requeue_enabled(slurm_stack: StackControl) -> bool:
     """Read the eager-requeue flag rendered by the E2E Helm chart, from SAC in the Slurm namespace."""
 
-    deployment = slurm_stack.get("deployment", _SAC)
-    controller = next(
-        container for container in deployment["spec"]["template"]["spec"]["containers"] if container["name"] == _SAC
-    )
-    return any(entry["name"] == _EAGER_ENV and entry.get("value") == "true" for entry in controller.get("env", []))
+    return _sac_flag_enabled(slurm_stack, _EAGER_ENV)
+
+
+def restart_in_allocation_enabled(slurm_stack: StackControl) -> bool:
+    """Read the restart-in-allocation flag rendered by the E2E Helm chart, from SAC in the Slurm namespace."""
+
+    return _sac_flag_enabled(slurm_stack, _RESTART_IN_ALLOCATION_ENV)
 
 
 def _apply_job_manager_config(stack: StackControl, job_manager: str, value: str) -> None:
