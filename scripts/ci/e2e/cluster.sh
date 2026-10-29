@@ -168,8 +168,10 @@ _configure_registry_hosts() {
       || error "Could not create $registry_dir on node $node"
 
     # cp /dev/stdin avoids depending on a shell/heredoc inside the node image.
+    # The node reaches the registry over the Kind network, where it listens on
+    # 5000; $port is only where the host publishes it.
     if ! cat <<EOF | docker exec -i "$node" cp /dev/stdin "$registry_dir/hosts.toml"
-[host."http://${name}:${port}"]
+[host."http://${name}:5000"]
   capabilities = ["pull", "resolve"]
 EOF
     then
